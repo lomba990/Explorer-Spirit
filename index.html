@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Explorer Spirit — Stories from Space</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* ====== WARNA & UKURAN (boleh kamu ubah) ====== */
+  :root {
+    --navy: #131A3F;      /* latar luar angkasa */
+    --panel: #1E2A5E;     /* kotak chat */
+    --cream: #FFF6E6;     /* gelembung Spirit */
+    --orange: #FF8C42;    /* gelembung anak */
+    --yellow: #FFD166;    /* aksen */
+    --soft: #C9D1F2;      /* teks pelan */
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--cream);
+    font-family: 'Nunito', Arial, sans-serif;
+    background: radial-gradient(circle at 20% 10%, #26336e 0%, var(--navy) 55%);
+    display: flex; flex-direction: column; align-items: center;
+  }
+  /* bintang-bintang kecil di latar */
+  body::before {
+    content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .6;
+    background-image:
+      radial-gradient(2px 2px at 10% 20%, #fff 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 30% 70%, #fff 50%, transparent 51%),
+      radial-gradient(2px 2px at 55% 15%, #fff 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 80% 40%, #fff 50%, transparent 51%),
+      radial-gradient(2px 2px at 90% 85%, #fff 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 45% 90%, #fff 50%, transparent 51%);
+  }
+  .app { width: min(960px, 100%); padding: 20px; display: grid; grid-template-columns: 300px 1fr; gap: 24px; }
+  .app > * { min-width: 0; }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+    .spirit-box .spirit { width: 180px; height: 180px; }
+  }
+
+  /* ====== SPIRIT + ANIMASI ====== */
+  .spirit-box { display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 12px; }
+  .spirit-box h1 { font-family: 'Fredoka', Arial, sans-serif; margin: 0; font-size: 28px; color: var(--yellow); }
+  .status { color: var(--soft); font-size: 15px; min-height: 22px; text-align: center; }
+  .spirit {
+    width: 260px; height: 260px; position: relative;
+    animation: float 4s ease-in-out infinite;          /* melayang pelan saat diam */
+  }
+  .spirit .body { width: 100%; height: 100%; transform-origin: 50% 90%; }
+  .spirit img {
+    width: 100%; height: 100%; object-fit: contain; display: block;
+    transform-origin: 50% 90%;
+    filter: drop-shadow(0 0 18px rgba(120,170,255,.35));
+    transition: filter .3s;
+  }
+  /* saat berbicara: badan "mengangguk" + cahaya lebih terang */
+  .spirit.talking .body { animation: talk .32s ease-in-out infinite alternate; }
+  .spirit.talking img { filter: drop-shadow(0 0 30px rgba(140,200,255,.9)); }
+  /* setiap kata: dorongan kecil (dipicu dari JavaScript) */
+  .spirit img.word { animation: word .16s ease-out; }
+  /* cahaya antena berkedip saat berbicara */
+  .antenna { position: absolute; left: 50%; top: 8%; width: 26px; height: 26px; margin-left: -13px; border-radius: 50%;
+             background: radial-gradient(circle, rgba(170,230,255,.95), rgba(170,230,255,0) 70%); opacity: 0; }
+  .spirit.talking .antenna { animation: blink .5s ease-in-out infinite alternate; }
+  /* gelombang suara di bawah Spirit */
+  .wave { display: flex; gap: 6px; height: 34px; align-items: center; opacity: .25; transition: opacity .3s; }
+  .wave span { width: 8px; height: 8px; border-radius: 4px; background: var(--yellow); }
+  .talking-wave { opacity: 1; }
+  .talking-wave span { animation: bar .5s ease-in-out infinite alternate; }
+  .talking-wave span:nth-child(2) { animation-delay: .1s; } .talking-wave span:nth-child(3) { animation-delay: .2s; }
+  .talking-wave span:nth-child(4) { animation-delay: .3s; } .talking-wave span:nth-child(5) { animation-delay: .15s; }
+  @keyframes float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+  @keyframes talk  { from { transform: scale(1, 1); } to { transform: scale(1.03, .97) translateY(3px); } }
+  @keyframes word  { 0% { transform: scale(1); } 50% { transform: scale(1.05, .95); } 100% { transform: scale(1); } }
+  @keyframes blink { from { opacity: .2; } to { opacity: 1; } }
+  @keyframes bar   { from { height: 6px; } to { height: 32px; } }
+
+  /* ====== CHAT ====== */
+  .chat { background: var(--panel); border-radius: 28px; padding: 18px; display: flex; flex-direction: column; gap: 12px;
+          border: 2px solid #34407A; min-height: 70vh; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+  .toolbar button { font: 700 14px 'Nunito', Arial, sans-serif; border: 2px solid var(--yellow); color: var(--yellow);
+                    background: transparent; border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+  .toolbar button.on { background: var(--yellow); color: var(--navy); }
+  .messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 4px; max-height: 60vh; }
+  .msg { max-width: 85%; padding: 12px 16px; line-height: 1.5; font-size: 17px; color: var(--navy); white-space: pre-wrap; }
+  .msg.kid { align-self: flex-end; background: var(--orange); border-radius: 20px 20px 6px 20px; }
+  .msg.bot { align-self: flex-start; background: var(--cream); border-radius: 20px 20px 20px 6px; }
+  .msg img { display: block; width: 100%; max-width: 360px; border-radius: 12px; margin-top: 10px; }
+  .credit { font-size: 13px; color: #4A4F6A; margin-top: 6px; }
+  .label { display: inline-block; margin-top: 8px; font-size: 13px; font-weight: 700; color: #7a4a00;
+           border: 2px solid #E0A93A; border-radius: 999px; padding: 2px 10px; }
+  .label.general { color: #3d3f5c; border-color: #9aa0c3; border-style: dashed; }
+  .composer { display: flex; gap: 8px; }
+  .composer input { flex: 1; font: 17px 'Nunito', Arial, sans-serif; padding: 12px 16px; border-radius: 999px; border: none; }
+  .composer button { font: 700 17px 'Fredoka', Arial, sans-serif; border: none; border-radius: 999px; padding: 0 18px; cursor: pointer;
+                     background: var(--yellow); color: var(--navy); }
+  .composer button.mic.listening { background: var(--orange); animation: blink .6s infinite alternate; }
+  .composer button:disabled { opacity: .5; cursor: wait; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ====== KIRI: SPIRIT ====== -->
+  <div class="spirit-box">
+    <div class="spirit" id="spirit">
+      <div class="antenna"></div>
+      <div class="body"><img id="spiritImg" src="spirit.png" alt="Explorer Spirit, a friendly blue robot in a flying saucer"></div>
+    </div>
+    <div class="wave" id="wave"><span></span><span></span><span></span><span></span><span></span></div>
+    <h1>Explorer Spirit</h1>
+    <div class="status" id="status">Hi! Ask me about the things left on the Moon or Mars.</div>
+  </div>
+
+  <!-- ====== KANAN: CHAT ====== -->
+  <div class="chat">
+    <div class="toolbar">
+      <button id="langEn" class="on">English</button>
+      <button id="langId">Bahasa Indonesia</button>
+      <button id="voiceBtn" class="on">🔊 Voice: ON</button>
+    </div>
+    <div class="messages" id="messages"></div>
+    <form class="composer" id="form">
+      <button type="button" class="mic" id="micBtn" title="Speak">🎤</button>
+      <input id="input" autocomplete="off" maxlength="300" placeholder="Example: What is the Lunar Roving Vehicle?">
+      <button type="submit" id="sendBtn">Send</button>
+    </form>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   PENGATURAN SUARA ROBOT (boleh kamu ubah angkanya)
+   pitch: 0.1–2  (makin tinggi = makin "robot imut")
+   rate : 0.5–2  (kecepatan bicara)
+   ========================================================= */
+const VOICE = { pitch: 1.6, rate: 0.95, volume: 1, beep: true };
+
+let lang = "en";          // bahasa awal: "en" (English). Pilihan lain: "id" (Bahasa Indonesia)
+const DEBUG = location.search.includes("debug");   // buka situs dengan ?debug untuk melihat pesan error
+let voiceOn = true;
+const $ = (id) => document.getElementById(id);
+const spirit = $("spirit"), spiritImg = $("spiritImg"), wave = $("wave");
+spiritImg.addEventListener("animationend", () => spiritImg.classList.remove("word"));
+
+/* ---------- Teks antarmuka 2 bahasa ---------- */
+const UI = {
+  id: { hello: "Halo! Aku Explorer Spirit. Aku menjaga benda-benda yang ditinggalkan para penjelajah di Bulan dan Mars. Mau dengar cerita tentang apa?",
+        think: "Spirit sedang mengingat-ingat…", ready: "Tanya aku lagi!", listen: "Aku mendengarkan…",
+        placeholder: "Contoh: Apa itu Lunar Roving Vehicle?", voiceOn: "🔊 Suara: ON", voiceOff: "🔇 Suara: OFF",
+        send: "Kirim", error: "Sinyal dari luar angkasa sedang lemah. Coba lagi sebentar, ya!", photo: "Foto: NASA Image Library",
+        source: "Sumber: ", general: "Sumber: AI General Knowledge (pengetahuan sains umum, bukan data NASA)" },
+  en: { hello: "Hi! I'm Explorer Spirit. I look after the things explorers left behind on the Moon and Mars. What story would you like to hear?",
+        think: "Spirit is remembering…", ready: "Ask me another!", listen: "I'm listening…",
+        placeholder: "Example: What is the Lunar Roving Vehicle?", voiceOn: "🔊 Voice: ON", voiceOff: "🔇 Voice: OFF",
+        send: "Send", error: "My signal from space is weak right now. Please try again in a moment!", photo: "Photo: NASA Image Library",
+        source: "Source: ", general: "Source: AI General Knowledge (general space science, not NASA data)" }
+};
+const t = (k) => UI[lang][k];
+
+/* ---------- Menampilkan pesan di chat ---------- */
+function addMessage(text, who, extra = {}) {
+  const div = document.createElement("div");
+  div.className = "msg " + who;
+  div.textContent = text;                       // textContent = aman, tidak menjalankan kode
+  if (extra.image) {
+    const img = document.createElement("img");
+    img.src = extra.image.url; img.alt = extra.image.title || "NASA photo";
+    img.onload = () => { $("messages").scrollTop = $("messages").scrollHeight; };
+    div.appendChild(img);
+    const c = document.createElement("div"); c.className = "credit";
+    c.textContent = t("photo") + (extra.image.title ? " — " + extra.image.title : "");
+    div.appendChild(c);
+  }
+  if (extra.label && extra.label !== "None") {
+    const l = document.createElement("span"); l.className = "label";
+    if (extra.label === "AI General Knowledge") {          // bukan data NASA: diberi warna lain supaya jelas
+      l.classList.add("general"); l.textContent = t("general");
+    } else {
+      l.textContent = t("source") + extra.label;
+    }
+    div.appendChild(document.createElement("br")); div.appendChild(l);
+  }
+  $("messages").appendChild(div);
+  $("messages").scrollTop = $("messages").scrollHeight;
+}
+
+/* =========================================================
+   SUARA ROBOT — memakai text-to-speech bawaan browser (GRATIS)
+   ========================================================= */
+let voices = [];
+function loadVoices() { voices = speechSynthesis.getVoices(); }
+if ("speechSynthesis" in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+
+function pickVoice() {
+  const code = lang === "id" ? "id" : "en";
+  // utamakan suara Google (lebih jernih), lalu suara apa pun yang bahasanya cocok
+  return voices.find(v => v.lang.toLowerCase().startsWith(code) && /google/i.test(v.name))
+      || voices.find(v => v.lang.toLowerCase().startsWith(code)) || null;
+}
+
+/* bunyi "bip-bup" robot sebelum bicara (dibuat dengan Web Audio, gratis) */
+let audioCtx;
+function beepBoop() {
+  return new Promise((done) => {
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const now = audioCtx.currentTime;
+      [[880, 0], [1320, 0.12]].forEach(([freq, at]) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+        o.type = "sine"; o.frequency.value = freq;
+        g.gain.setValueAtTime(0.0001, now + at);
+        g.gain.exponentialRampToValueAtTime(0.15, now + at + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.1);
+        o.connect(g).connect(audioCtx.destination); o.start(now + at); o.stop(now + at + 0.11);
+      });
+      setTimeout(done, 280);
+    } catch (e) { done(); }
+  });
+}
+
+function startTalking() { spirit.classList.add("talking"); wave.classList.add("talking-wave"); }
+function stopTalking()  { spirit.classList.remove("talking"); wave.classList.remove("talking-wave"); }
+function wordPop() {      // dorongan kecil di setiap kata = efek "mulut bergerak"
+  spiritImg.classList.remove("word"); void spiritImg.offsetWidth; spiritImg.classList.add("word");
+}
+
+async function speak(text) {
+  if (!voiceOn || !("speechSynthesis" in window) || !text) return;
+  speechSynthesis.cancel();
+  if (VOICE.beep) await beepBoop();
+  // dipecah per kalimat supaya Chrome tidak berhenti di tengah teks panjang
+  const parts = text.match(/[^.!?…]+[.!?…]*/g) || [text];
+  const voice = pickVoice();
+  startTalking();
+  parts.forEach((p, i) => {
+    const u = new SpeechSynthesisUtterance(p.trim());
+    u.lang = lang === "id" ? "id-ID" : "en-US";
+    if (voice) u.voice = voice;
+    u.pitch = VOICE.pitch; u.rate = VOICE.rate; u.volume = VOICE.volume;
+    u.onboundary = (e) => { if (e.name === "word") wordPop(); };
+    if (i === parts.length - 1) { u.onend = stopTalking; u.onerror = stopTalking; }
+    speechSynthesis.speak(u);
+  });
+}
+
+/* =========================================================
+   MIKROFON — anak bisa bicara (Chrome/Edge, GRATIS)
+   ========================================================= */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+if (SR) {
+  rec = new SR(); rec.interimResults = false; rec.maxAlternatives = 1;
+  rec.onresult = (e) => { $("input").value = e.results[0][0].transcript; $("form").requestSubmit(); };
+  rec.onend = () => { $("micBtn").classList.remove("listening"); $("status").textContent = t("ready"); };
+} else {
+  $("micBtn").style.display = "none";          // browser tidak mendukung → tombol disembunyikan
+}
+$("micBtn").onclick = () => {
+  if (!rec) return;
+  speechSynthesis.cancel(); stopTalking();
+  rec.lang = lang === "id" ? "id-ID" : "en-US";
+  $("micBtn").classList.add("listening"); $("status").textContent = t("listen");
+  rec.start();
+};
+
+/* =========================================================
+   KIRIM PERTANYAAN → Netlify Function → NASA + Gemini
+   ========================================================= */
+$("form").onsubmit = async (e) => {
+  e.preventDefault();
+  const question = $("input").value.trim();
+  if (!question) return;
+  addMessage(question, "kid");
+  $("input").value = ""; $("sendBtn").disabled = true;
+  $("status").textContent = t("think");
+  try {
+    const res = await fetch("/.netlify/functions/spirit", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question, lang })
+    });
+    const data = await res.json();
+    if (data.devError) {
+      console.warn("Pesan untuk developer:", data.devError);   // lihat di Console (F12)
+      if (DEBUG) addMessage("⚙️ Untuk developer: " + data.devError, "bot");
+    }
+    const answer = data.answer || t("error");
+    addMessage(answer, "bot", { image: data.image, label: data.source_label });
+    speak(answer);
+  } catch (err) {
+    console.error(err);
+    addMessage(t("error"), "bot");
+  } finally {
+    $("sendBtn").disabled = false; $("status").textContent = t("ready");
+  }
+};
+
+/* ---------- Tombol bahasa & suara ---------- */
+function setLang(l) {
+  lang = l;
+  $("langId").classList.toggle("on", l === "id"); $("langEn").classList.toggle("on", l === "en");
+  $("input").placeholder = t("placeholder"); $("sendBtn").textContent = t("send");
+  $("voiceBtn").textContent = voiceOn ? t("voiceOn") : t("voiceOff");
+  document.documentElement.lang = l;
+}
+$("langId").onclick = () => setLang("id");
+$("langEn").onclick = () => setLang("en");
+$("voiceBtn").onclick = () => {
+  voiceOn = !voiceOn;
+  if (!voiceOn) { speechSynthesis.cancel(); stopTalking(); }
+  $("voiceBtn").classList.toggle("on", voiceOn);
+  $("voiceBtn").textContent = voiceOn ? t("voiceOn") : t("voiceOff");
+};
+
+/* Sapaan pertama (suara baru boleh diputar setelah anak menyentuh halaman — aturan browser) */
+addMessage(t("hello"), "bot");
+document.addEventListener("click", function firstTouch() {
+  document.removeEventListener("click", firstTouch);
+  if (!$("messages").dataset.greeted) { $("messages").dataset.greeted = "1"; speak(t("hello")); }
+}, { once: true });
+</script>
+</body>
+</html>

@@ -1,0 +1,4 @@
+# Pengaturan Netlify: halaman ada di folder utama, fungsi AI ada di netlify/functions
+[build]
+  publish = "."
+  functions = "netlify/functions"
