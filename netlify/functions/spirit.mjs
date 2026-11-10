@@ -13,10 +13,37 @@
 import CATALOG from "../../data/catalog-moon.mjs";
 import MARS from "../../data/mars-hardware.mjs";
 
-const MODEL = "gemini-flash-latest"; // alias: otomatis ikut model Flash terbaru dari Google
-// Netlify menghentikan fungsi setelah 10 detik. Semua batas waktu di bawah dijaga supaya totalnya < 10 detik.
-const NASA_TIMEOUT_MS = 3000;        // batas tunggu sumber NASA
-const GEMINI_TIMEOUT_MS = 6000;      // batas tunggu Gemini
+// Model Gemini, dicoba berurutan. Flash-Lite dipakai karena paling cepat (Flash biasa bisa lebih dari 6 detik).
+// Mau pakai model lain? Isi environment variable GEMINI_MODEL di Netlify, misalnya gemini-flash-latest.
+const MODELS = [process.env.GEMINI_MODEL, "gemini-flash-lite-latest", "gemini-3.1-flash-lite", "gemini-flash-latest"].filter(Boolean);
+// Netlify menghentikan fungsi setelah 10 detik. Semua batas waktu dijaga supaya totalnya di bawah itu.
+const TOTAL_BUDGET_MS = 9300;        // batas total satu jawaban
+const NASA_TIMEOUT_MS = 2500;        // batas tunggu sumber NASA
+let MODEL = MODELS[0];               // model yang terakhir berhasil (ditampilkan di halaman cek)
+
+// Panggil Gemini: kalau nama model tidak dikenal (404) atau pengaturan thinking ditolak (400), langsung coba berikutnya
+async function askGemini(payload, deadline) {
+  let last;
+  for (const model of MODELS) {
+    for (const thinking of [true, false]) {
+      const left = deadline - Date.now();
+      if (left < 1500) throw Object.assign(new Error("waktu habis"), { name: "TimeoutError" });
+      const gen = { ...payload.generationConfig };
+      if (thinking) gen.thinkingConfig = { thinkingLevel: "minimal" };   // Flash-Lite: hampir tanpa "berpikir" = cepat
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: "POST", signal: withTimeout(left),
+        headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
+        body: JSON.stringify({ ...payload, generationConfig: gen }),
+      });
+      if (r.ok) { MODEL = model; return r; }
+      last = r;
+      if (r.status === 400 && thinking) continue;          // coba lagi tanpa thinkingConfig
+      if (r.status === 404 || r.status === 400) break;      // model ini tidak ada: lanjut ke model berikutnya
+      return r;                                             // error lain (403, 429, 500): laporkan apa adanya
+    }
+  }
+  return last;
+}
 
 const SYSTEM_PROMPT = `
 You are EXPLORER SPIRIT, the friendly spirit of the objects NASA explorers left behind on the Moon, on Mars and in deep space.
@@ -104,7 +131,7 @@ would will tell me about of on in at to for from with and or that this those the
 please story spirit hi hello hey kind thing things left behind leave still moon's
 apa siapa dimana di mana kapan kenapa mengapa bagaimana itu ini yang dan atau dari ke pada untuk dengan tentang
 ceritakan cerita tolong dong ya aku saya kamu kami kita ada adalah sih kah apakah benda bisa boleh mau tahu
-ditinggalkan ditinggal tinggal masih yes yeah yep sure ok okay tentu iya oke more lagi`.split(/\s+/));
+ditinggalkan ditinggal tinggal masih yes yeah yep sure ok okay tentu iya oke more lagi happened happen terjadi sekarang now`.split(/\s+/));
 
 // Kata bahasa Indonesia / kata anak-anak -> istilah di katalog NASA
 const SYNONYMS = {
@@ -120,6 +147,10 @@ const SYNONYMS = {
 // Kata yang terlalu umum di katalog (hampir semua baris mengandung "lunar")
 const CATALOG_NOISE = new Set(["moon", "bulan", "lunar", "apollo", "mars", "nasa", "mission", "misi", "astronaut", "astronauts",
   "astronot", "cosmonaut", "cosmonauts", "objects", "object", "space", "luar", "angkasa"]);
+
+// "parachutes" -> "parachute", "boxes" -> "box": supaya bentuk jamak tetap cocok
+const stem = (w) => w.length <= 3 ? w : /(ses|xes|zes|ches|shes)$/.test(w) ? w.slice(0, -2) : /[^s]s$/.test(w) ? w.slice(0, -1) : w;
+const wordRe = (w) => new RegExp(`(^|[^a-z])${stem(w).replace(/[^a-z0-9-]/g, "")}(s|es)?([^a-z]|$)`);
 
 function keywords(q) {
   return q.toLowerCase().replace(/[^\p{L}\p{N}\s'-]/gu, " ").split(/\s+/)
@@ -145,7 +176,7 @@ function searchCatalog(question) {
   const words = keywords(question).filter(w => w.length > 2 && !CATALOG_NOISE.has(w) && !/^\d+$/.test(w));
   const missions = missionsIn(question);
   // Cocokkan kata utuh (boleh bentuk jamak): "ball" cocok dengan "balls", tapi "one" tidak cocok dengan "cone"
-  const patterns = words.map(w => new RegExp(`(^|[^a-z])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(s|es)?([^a-z]|$)`));
+  const patterns = words.map(wordRe);
   const scored = [];
   for (const it of CATALOG.items) {
     const obj = it.object.toLowerCase(), mis = it.mission.toLowerCase();
@@ -195,22 +226,35 @@ function moonOverview() {
   return block;
 }
 
-// ---------- Sumber 1b: Daftar perangkat NASA di Mars ----------
-const MARS_WORDS = ["viking", "pathfinder", "sojourner", "polar lander", "deep space", "spirit", "opportunity", "phoenix",
-  "curiosity", "insight", "perseverance", "ingenuity", "helicopter", "helikopter", "sky crane", "heat shield", "parachute",
-  "parasut", "tube", "tabung", "sample", "sampel", "airbag"];
+// ---------- Sumber 1b: Daftar benda di Mars ----------
+const MARS_NOISE = new Set(["mars", "planet", "red", "merah", "left", "nasa", "mission", "misi", "object", "objects", "landed", "mendarat"]);
+const MARS_SYNONYMS = { parasut: "parachute", helikopter: "helicopter", tabung: "tube", sampel: "sample", perisai: "shield",
+  pemberat: "tungsten", bendera: "pennant", flag: "pennant", soviet: "soviet", rusia: "soviet", cina: "china", tiongkok: "china",
+  eropa: "esa", inggris: "beagle", pendarat: "lander", mobil: "rover", "sky": "crane" };
+function marsLine(it, full) {
+  return `- ${it.object} | ${it.agency} | mission: ${it.mission} | arrived: ${it.landed} | location: ${it.location} | status: ${it.status}` +
+    (full ? ` | left behind: ${it.left_behind}` + (it.notes ? ` | ${it.notes}` : "") + (it.hirise ? ` | seen in NASA HiRISE image ${it.hirise}` : "") : "");
+}
 function searchMars(question, overviewIfNone) {
   const q = question.toLowerCase().replace(/explorer spirit/g, "");
-  const hits = MARS.items.filter(it => {
-    const hay = (it.object + " " + it.mission + " " + it.notes).toLowerCase();
-    return MARS_WORDS.some(w => q.includes(w) && hay.includes(w.replace("helikopter", "helicopter").replace("parasut", "parachute")
-      .replace("tabung", "tube").replace("sampel", "sample")));
-  });
-  const rows = hits.length ? hits : (overviewIfNone ? MARS.items : []);
-  if (!rows.length) return null;
-  const lines = rows.map(it => `- ${it.object} | mission: ${it.mission} | landed: ${it.landed} | location: ${it.location} | status: ${it.status}` +
-    (it.notes ? ` | ${it.notes}` : ""));
-  return { text: `[CATALOGUE] ${MARS.source}\n` + lines.join("\n"), imageQuery: hits.length ? hits[0].object : "Mars rover" };
+  const words = keywords(q).map(w => MARS_SYNONYMS[w] || w).filter(w => w.length > 2 && !MARS_NOISE.has(w) && !/^\d+$/.test(w));
+  if (/\bspirit\s+rover\b|\brover\s+spirit\b|\bmer-a\b/.test(q)) words.push("spirit");   // "Spirit" saja = nama chatbot
+  const missionNo = [...q.matchAll(/\bmars\s*(\d)\b/g)].map(m => "mars " + m[1]);   // "Mars 2", "Mars 3"
+  const scored = MARS.items.map(it => {
+    const hay = [it.object, it.agency, it.mission, it.left_behind, it.notes].join(" ").toLowerCase();
+    let score = 0;
+    for (const w of words) if (wordRe(w).test(hay)) score += 1;
+    if (missionNo.includes(it.mission.toLowerCase())) score += 3;
+    if (words.some(w => it.object.toLowerCase().includes(stem(w)))) score += 2;   // nama benda disebut langsung
+    return { it, score };
+  }).filter(x => x.score > 0).sort((a, b) => b.score - a.score);
+  const hits = scored.filter(x => x.score >= scored[0].score - 1).slice(0, 4).map(x => x.it);
+  if (hits.length) {
+    return { text: `[CATALOGUE] ${MARS.source}\n${MARS.summary}\n` + hits.map(it => marsLine(it, true)).join("\n"), imageQuery: hits[0].object };
+  }
+  if (!overviewIfNone) return null;
+  return { text: `[CATALOGUE] ${MARS.source}\n${MARS.summary}\nAll objects (short list):\n` + MARS.items.map(it => marsLine(it, false)).join("\n"),
+           imageQuery: "Mars rover landing" };
 }
 
 // ---------- Sumber 2: NASA Image Library ----------
@@ -267,7 +311,7 @@ async function diagnose() {
   const t0 = Date.now();
   report["1_GEMINI_API_KEY"] = process.env.GEMINI_API_KEY ? "OK: sudah diisi" : "GAGAL: belum diisi di Netlify Environment variables (lalu deploy ulang)";
   report["2_NASA_API_KEY"] = process.env.NASA_API_KEY ? "OK: sudah diisi" : "Belum diisi (tidak wajib, data rover Mars memakai DEMO_KEY)";
-  report["3_data"] = `OK: katalog Bulan ${CATALOG.items.length} baris, daftar Mars ${MARS.items.length} perangkat`;
+  report["3_data"] = `OK: katalog Bulan ${CATALOG.items.length} baris, daftar Mars ${MARS.items.length} benda`;
   try {
     const t = Date.now(); const imgs = await searchImages("Apollo 14 golf");
     report["4_NASA_Image_Library"] = imgs.length ? `OK: ${imgs.length} hasil dalam ${Date.now() - t} ms` : "GAGAL: tidak ada hasil";
@@ -275,16 +319,12 @@ async function diagnose() {
   if (process.env.GEMINI_API_KEY) {
     const t = Date.now();
     try {
-      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-        method: "POST", signal: withTimeout(GEMINI_TIMEOUT_MS),
-        headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
-        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "Reply with the single word: ready" }] }],
-          generationConfig: { maxOutputTokens: 200, thinkingConfig: { thinkingLevel: "low" } } }),
-      });
+      const r = await askGemini({ contents: [{ role: "user", parts: [{ text: "Reply with the single word: ready" }] }],
+        generationConfig: { maxOutputTokens: 50 } }, Date.now() + 8500);
       const txt = await r.text();
       report["5_Gemini"] = r.ok ? `OK: model ${MODEL} menjawab dalam ${Date.now() - t} ms` : `GAGAL: HTTP ${r.status} — ${txt.slice(0, 400)}`;
     } catch (e) {
-      report["5_Gemini"] = "GAGAL: " + (e?.name === "TimeoutError" ? `lebih dari ${GEMINI_TIMEOUT_MS / 1000} detik` : e?.message);
+      report["5_Gemini"] = "GAGAL: " + (e?.name === "TimeoutError" || e?.name === "AbortError" ? `lebih dari 8 detik (model dicoba: ${MODELS.join(", ")})` : e?.message);
     }
   } else report["5_Gemini"] = "Dilewati karena GEMINI_API_KEY belum diisi";
   report["total_ms"] = Date.now() - t0;
@@ -292,6 +332,7 @@ async function diagnose() {
 }
 
 async function handle(req) {
+  const deadline = Date.now() + TOTAL_BUDGET_MS;
   if (req.method === "GET") return diagnose();
   if (req.method !== "POST") return reply({ answer: "", source_label: "None", has_data: false }, 405);
 
@@ -337,19 +378,15 @@ async function handle(req) {
   const userTurn = `lang: ${lang}\nmode: ${mode}\nconversation:\n${history || "(none)"}\n<nasa_context>\n${parts.join("\n\n")}\n</nasa_context>\n\nChild's question: ${question}`;
 
   // 2) Minta Gemini menceritakan fakta tadi
-  const callGemini = (withThinking) => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-    method: "POST",
-    signal: withTimeout(GEMINI_TIMEOUT_MS),
-    headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
-    body: JSON.stringify({
+  let g;
+  try {
+    g = await askGemini({
       system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
       contents: [{ role: "user", parts: [{ text: userTurn }] }],
       // Tidak ada "tools": Google Search dan alat lain MATI.
       generationConfig: {
         temperature: 0.4,
-        maxOutputTokens: 1500,
-        // "low" = Gemini tidak berpikir terlalu lama, supaya jawaban selesai sebelum batas 10 detik Netlify
-        ...(withThinking ? { thinkingConfig: { thinkingLevel: "low" } } : {}),
+        maxOutputTokens: 1200,
         responseMimeType: "application/json",
         responseSchema: {
           type: "OBJECT",
@@ -357,16 +394,10 @@ async function handle(req) {
           required: ["answer", "basis"],
         },
       },
-    }),
-  });
-
-  let g;
-  try {
-    g = await callGemini(true);
-    if (g.status === 400) g = await callGemini(false);   // model lama yang tidak kenal thinkingLevel: coba lagi tanpa itu
+    }, deadline);
   } catch (e) {
     return reply({ answer: "", source_label: "None", has_data: false,
-      devError: e?.name === "TimeoutError" || e?.name === "AbortError" ? "Gemini terlalu lama menjawab (lebih dari 6 detik)." : "Tidak bisa menghubungi Gemini: " + e?.message }, 504);
+      devError: e?.name === "TimeoutError" || e?.name === "AbortError" ? "Gemini terlalu lama menjawab (batas total 9 detik)." : "Tidak bisa menghubungi Gemini: " + e?.message }, 504);
   }
 
   if (g.status === 429) return reply({ answer: BUSY[lang], source_label: "None", has_data: false, devError: "Batas gratis Gemini tercapai (429). Tunggu sebentar." }, 429);
