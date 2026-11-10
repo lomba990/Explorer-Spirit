@@ -11,9 +11,12 @@
 // =====================================================================
 
 import CATALOG from "../../data/catalog-moon.mjs";
+import MARS from "../../data/mars-hardware.mjs";
 
 const MODEL = "gemini-flash-latest"; // alias: otomatis ikut model Flash terbaru dari Google
-const NASA_TIMEOUT_MS = 5000;        // batas tunggu sumber NASA, supaya chat tidak macet
+// Netlify menghentikan fungsi setelah 10 detik. Semua batas waktu di bawah dijaga supaya totalnya < 10 detik.
+const NASA_TIMEOUT_MS = 3000;        // batas tunggu sumber NASA
+const GEMINI_TIMEOUT_MS = 6000;      // batas tunggu Gemini
 
 const SYSTEM_PROMPT = `
 You are EXPLORER SPIRIT, the friendly spirit of the objects NASA explorers left behind on the Moon, on Mars and in deep space.
@@ -52,6 +55,13 @@ You remember every mission and you have waited quietly to tell its story. You ta
       English: "I don't have that information yet. Try asking me about another object on the Moon or Mars!"
       Indonesian: "Aku belum punya informasi itu. Coba tanya aku tentang benda lain di Bulan atau Mars, ya!"
 - If <nasa_context> covers only part of the question, answer that part from it and say plainly which part you don't know yet.
+
+## 1b. Modes and conversation
+- "mode" tells you which button the child pressed: "moon" (objects left on the Moon), "mars" (objects left on Mars),
+  or "explore" (anything about space). Stay on that theme unless the child clearly asks about something else in space.
+- "conversation" shows the last messages. Use it to understand short replies such as "yes", "ya", "tell me more" or "the second one".
+- If the child says yes to "do you want to know what was left behind?", give a short, exciting overview from <nasa_context>
+  (a few surprising objects, not a long list) and ask which one they want to hear about.
 
 ## 2. How you tell it (you are a storyteller, not a search engine)
 - Speak as the Spirit, warm and curious. With NASA data, speak in first person ("I was there when…") and keep the facts exactly as given.
@@ -94,7 +104,7 @@ would will tell me about of on in at to for from with and or that this those the
 please story spirit hi hello hey kind thing things left behind leave still moon's
 apa siapa dimana di mana kapan kenapa mengapa bagaimana itu ini yang dan atau dari ke pada untuk dengan tentang
 ceritakan cerita tolong dong ya aku saya kamu kami kita ada adalah sih kah apakah benda bisa boleh mau tahu
-ditinggalkan ditinggal tinggal masih`.split(/\s+/));
+ditinggalkan ditinggal tinggal masih yes yeah yep sure ok okay tentu iya oke more lagi`.split(/\s+/));
 
 // Kata bahasa Indonesia / kata anak-anak -> istilah di katalog NASA
 const SYNONYMS = {
@@ -130,15 +140,17 @@ function missionsIn(q) {
 
 function withTimeout(ms) { return AbortSignal.timeout ? AbortSignal.timeout(ms) : undefined; }
 
-// ---------- Sumber 1: Katalog NASA 2012 ----------
+// ---------- Sumber 1a: Katalog NASA 2012 (Bulan) ----------
 function searchCatalog(question) {
   const words = keywords(question).filter(w => w.length > 2 && !CATALOG_NOISE.has(w) && !/^\d+$/.test(w));
   const missions = missionsIn(question);
+  // Cocokkan kata utuh (boleh bentuk jamak): "ball" cocok dengan "balls", tapi "one" tidak cocok dengan "cone"
+  const patterns = words.map(w => new RegExp(`(^|[^a-z])${w.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(s|es)?([^a-z]|$)`));
   const scored = [];
   for (const it of CATALOG.items) {
     const obj = it.object.toLowerCase(), mis = it.mission.toLowerCase();
     let score = 0;
-    for (const w of words) if (obj.includes(w)) score += 2;
+    for (const re of patterns) if (re.test(obj)) score += 2;
     if (missions.some(m => mis === m || obj.startsWith(m))) score += words.length ? 1 : 3;
     if (score > 0) scored.push({ it, score });
   }
@@ -152,7 +164,10 @@ function searchCatalog(question) {
   else if (missions.length) rows = scored.map(s => s.it).slice(0, 30);
   else rows = [];
   if (!rows.length) return null;
+  return catalogBlock(rows, `${rows[0].mission} ${rows[0].object.replace(/\(.*?\)|\[.*?\]/g, "").split(/[,/]/)[0]}`.trim());
+}
 
+function catalogBlock(rows, imageQuery) {
   const missionNames = [...new Set(rows.map(r => r.mission))];
   const header = missionNames.filter(m => CATALOG.missions[m]).map(m => {
     const total = CATALOG.items.filter(i => i.mission === m).length;
@@ -161,10 +176,41 @@ function searchCatalog(question) {
   });
   const lines = rows.map(r =>
     `- ${r.mission} | ${r.object}` + (r.qty ? ` [${r.qty}]` : "") + (r.location ? ` | location: ${r.location}` : ""));
-  return {
-    text: `[CATALOGUE] ${CATALOG.source}\n` + (header.length ? header.join("\n") + "\n" : "") + lines.join("\n"),
-    imageQuery: `${rows[0].mission} ${rows[0].object.replace(/\(.*?\)|\[.*?\]/g, "").split(/[,/]/)[0]}`.trim(),
-  };
+  return { text: `[CATALOGUE] ${CATALOG.source}\n` + (header.length ? header.join("\n") + "\n" : "") + lines.join("\n"), imageQuery };
+}
+
+// Ringkasan katalog Bulan: dipakai kalau anak menjawab "ya" atau bertanya umum "apa saja yang ditinggalkan?"
+const MOON_HIGHLIGHTS = ["Golf balls", "Fallen Astronaut", "Falcon feather", "Hammer and Feather", "Charles Duke family photograph",
+  "Lunar Roving Vehicle (LRV)", "Lunar Retro-Ranging Reflector", "Gold Olive Branch", "Moon Memorial Disc", "Javelin",
+  "Bible", "100 2-dollar bills", "Lunokhod 1", "Surveyor 3", "Nail Clippers"];
+function moonOverview() {
+  const rows = [];
+  for (const h of MOON_HIGHLIGHTS) { const it = CATALOG.items.find(i => i.object.startsWith(h)); if (it) rows.push(it); }
+  const groups = {};
+  CATALOG.items.forEach(i => { groups[i.group] = (groups[i.group] || 0) + 1; });
+  const summary = `Total rows in the catalogue: ${CATALOG.items.length}\nRows per group: ` +
+    Object.entries(groups).map(([g, n]) => `${g} ${n}`).join(", ");
+  const block = catalogBlock(rows, "Apollo lunar surface experiments");
+  block.text = block.text.replace("\n", `\n${summary}\nSome notable objects:\n`);
+  return block;
+}
+
+// ---------- Sumber 1b: Daftar perangkat NASA di Mars ----------
+const MARS_WORDS = ["viking", "pathfinder", "sojourner", "polar lander", "deep space", "spirit", "opportunity", "phoenix",
+  "curiosity", "insight", "perseverance", "ingenuity", "helicopter", "helikopter", "sky crane", "heat shield", "parachute",
+  "parasut", "tube", "tabung", "sample", "sampel", "airbag"];
+function searchMars(question, overviewIfNone) {
+  const q = question.toLowerCase().replace(/explorer spirit/g, "");
+  const hits = MARS.items.filter(it => {
+    const hay = (it.object + " " + it.mission + " " + it.notes).toLowerCase();
+    return MARS_WORDS.some(w => q.includes(w) && hay.includes(w.replace("helikopter", "helicopter").replace("parasut", "parachute")
+      .replace("tabung", "tube").replace("sampel", "sample")));
+  });
+  const rows = hits.length ? hits : (overviewIfNone ? MARS.items : []);
+  if (!rows.length) return null;
+  const lines = rows.map(it => `- ${it.object} | mission: ${it.mission} | landed: ${it.landed} | location: ${it.location} | status: ${it.status}` +
+    (it.notes ? ` | ${it.notes}` : ""));
+  return { text: `[CATALOGUE] ${MARS.source}\n` + lines.join("\n"), imageQuery: hits.length ? hits[0].object : "Mars rover" };
 }
 
 // ---------- Sumber 2: NASA Image Library ----------
@@ -207,12 +253,24 @@ function reply(body, status = 200) {
 }
 
 export default async (req) => {
+  try {
+    return await handle(req);
+  } catch (err) {
+    // Apa pun yang gagal, halaman tetap menerima JSON (bukan halaman error) supaya pesannya jelas
+    return reply({ answer: "", source_label: "None", has_data: false, devError: "Error di otak chatbot: " + (err?.message || err) }, 500);
+  }
+};
+
+async function handle(req) {
   if (req.method !== "POST") return reply({ answer: "", source_label: "None", has_data: false }, 405);
 
-  let question = "", lang = "en";
-  try { ({ question = "", lang = "en" } = await req.json()); } catch {}
-  lang = lang === "id" ? "id" : "en";   // default English; "id" = Bahasa Indonesia
-  question = String(question).slice(0, 300).trim();
+  let body = {};
+  try { body = await req.json(); } catch {}
+  const lang = body.lang === "id" ? "id" : "en";   // default English; "id" = Bahasa Indonesia
+  const mode = ["moon", "mars", "explore"].includes(body.mode) ? body.mode : "explore";
+  const question = String(body.question || "").slice(0, 300).trim();
+  const history = (Array.isArray(body.history) ? body.history : []).slice(-6)
+    .map(h => `${h.role === "kid" ? "Child" : "Spirit"}: ${String(h.text || "").slice(0, 400)}`).join("\n");
   if (!question) return reply({ answer: NO_INFO[lang], source_label: "None", has_data: false }, 400);
 
   if (!process.env.GEMINI_API_KEY) {
@@ -220,17 +278,23 @@ export default async (req) => {
       devError: "GEMINI_API_KEY belum diisi di Netlify (Project configuration > Environment variables). Setelah diisi, lakukan deploy ulang." }, 500);
   }
 
-  // 1) Kumpulkan fakta dari ketiga sumber NASA (sumber 2 dan 3 dicari bersamaan)
-  const catalog = searchCatalog(question);
-  const words = keywords(question);
-  const rover = roverIn(question);
+  // 1) Kumpulkan fakta dari sumber NASA sesuai tombol yang dipilih
+  const lastKid = (Array.isArray(body.history) ? body.history : []).filter(h => h.role === "kid").slice(-1)[0]?.text || "";
+  const searchText = question + " " + (keywords(question).length <= 1 ? lastKid : "");   // jawaban pendek "ya" -> pakai pertanyaan sebelumnya
+  let local = null;
+  if (mode === "moon") local = searchCatalog(searchText) || moonOverview();
+  else if (mode === "mars") local = searchMars(searchText, true) || null;
+  else local = searchCatalog(searchText) || searchMars(searchText, false);
+
+  const words = keywords(searchText);
+  const rover = roverIn(searchText);
   const [images, manifest] = await Promise.all([
-    searchImages(catalog ? catalog.imageQuery : words.slice(0, 5).join(" ")).catch(() => []),
+    searchImages(local ? local.imageQuery : words.slice(0, 5).join(" ")).catch(() => []),
     rover ? roverManifest(rover).catch(() => null) : Promise.resolve(null),
   ]);
 
   const parts = [], labels = [];
-  if (catalog) { parts.push(catalog.text); labels.push("Aggregate Data"); }
+  if (local) { parts.push(local.text); labels.push("Aggregate Data"); }
   if (images.length) {
     parts.push("[IMAGE LIBRARY]\n" + images.map((it, i) =>
       `(${i + 1}) Title: ${it.title}\nDate: ${it.date}\nNASA center: ${it.center}\nDescription: ${it.description}`).join("\n\n"));
@@ -239,19 +303,22 @@ export default async (req) => {
   if (manifest) { parts.push(manifest); labels.push("NASA Open API"); }
 
   // Tanpa data NASA, blok konteks dikirim kosong: Gemini hanya boleh menjawab kalau topiknya luar angkasa, fisika, atau fenomena langit
-  const userTurn = `lang: ${lang}\n<nasa_context>\n${parts.join("\n\n")}\n</nasa_context>\n\nChild's question: ${question}`;
+  const userTurn = `lang: ${lang}\nmode: ${mode}\nconversation:\n${history || "(none)"}\n<nasa_context>\n${parts.join("\n\n")}\n</nasa_context>\n\nChild's question: ${question}`;
 
   // 2) Minta Gemini menceritakan fakta tadi
-  const g = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+  const callGemini = (withThinking) => fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
     method: "POST",
+    signal: withTimeout(GEMINI_TIMEOUT_MS),
     headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
     body: JSON.stringify({
       system_instruction: { parts: [{ text: SYSTEM_PROMPT }] },
       contents: [{ role: "user", parts: [{ text: userTurn }] }],
-      // Tidak ada "tools": Google Search dan alat lain MATI, jadi Gemini hanya melihat data NASA.
+      // Tidak ada "tools": Google Search dan alat lain MATI.
       generationConfig: {
         temperature: 0.4,
-        maxOutputTokens: 800,
+        maxOutputTokens: 1500,
+        // "low" = Gemini tidak berpikir terlalu lama, supaya jawaban selesai sebelum batas 10 detik Netlify
+        ...(withThinking ? { thinkingConfig: { thinkingLevel: "low" } } : {}),
         responseMimeType: "application/json",
         responseSchema: {
           type: "OBJECT",
@@ -261,6 +328,15 @@ export default async (req) => {
       },
     }),
   });
+
+  let g;
+  try {
+    g = await callGemini(true);
+    if (g.status === 400) g = await callGemini(false);   // model lama yang tidak kenal thinkingLevel: coba lagi tanpa itu
+  } catch (e) {
+    return reply({ answer: "", source_label: "None", has_data: false,
+      devError: e?.name === "TimeoutError" || e?.name === "AbortError" ? "Gemini terlalu lama menjawab (lebih dari 6 detik)." : "Tidak bisa menghubungi Gemini: " + e?.message }, 504);
+  }
 
   if (g.status === 429) return reply({ answer: BUSY[lang], source_label: "None", has_data: false, devError: "Batas gratis Gemini tercapai (429). Tunggu sebentar." }, 429);
   if (!g.ok) {
@@ -284,4 +360,4 @@ export default async (req) => {
     has_data: basis === "nasa",
     image: basis === "nasa" && first?.thumb ? { url: first.thumb, title: first.title, nasa_id: first.nasa_id } : null,
   });
-};
+}

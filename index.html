@@ -7,70 +7,42 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;700&family=Nunito:wght@400;700&display=swap" rel="stylesheet">
 <style>
-  /* ====== WARNA & UKURAN (boleh kamu ubah) ====== */
+  /* ====== WARNA (boleh kamu ubah) ====== */
   :root {
-    --navy: #131A3F;      /* latar luar angkasa */
-    --panel: #1E2A5E;     /* kotak chat */
-    --cream: #FFF6E6;     /* gelembung Spirit */
-    --orange: #FF8C42;    /* gelembung anak */
-    --yellow: #FFD166;    /* aksen */
-    --soft: #C9D1F2;      /* teks pelan */
+    --navy: #131A3F; --cream: #FFF6E6; --orange: #FF8C42; --yellow: #FFD166; --soft: #C9D1F2;
+    --bg-image: none;   /* foto latar sendiri: ganti none dengan url('background.jpg') */
   }
   * { box-sizing: border-box; }
-  /* ====== LATAR LUAR ANGKASA ======
-     --bg-image: ganti none dengan url('background.jpg') kalau mau memakai foto sendiri
-     (simpan fotonya di folder yang sama dengan index.html) */
-  :root { --bg-image: none; }
   body {
-    margin: 0; min-height: 100vh; color: var(--cream);
-    font-family: 'Nunito', Arial, sans-serif;
+    margin: 0; min-height: 100vh; color: var(--cream); font-family: 'Nunito', Arial, sans-serif;
     background-color: #070B1F;
     background-image: var(--bg-image),
-      radial-gradient(ellipse at 15% 20%, rgba(120, 80, 200, .35), transparent 45%),   /* nebula ungu */
-      radial-gradient(ellipse at 85% 75%, rgba(40, 160, 180, .28), transparent 50%),   /* nebula tosca */
-      radial-gradient(ellipse at 60% 10%, rgba(255, 140, 66, .12), transparent 40%),   /* cahaya oranye */
+      radial-gradient(ellipse at 15% 20%, rgba(120, 80, 200, .35), transparent 45%),
+      radial-gradient(ellipse at 85% 75%, rgba(40, 160, 180, .28), transparent 50%),
+      radial-gradient(ellipse at 60% 10%, rgba(255, 140, 66, .12), transparent 40%),
       radial-gradient(circle at 50% 50%, #131A3F 0%, #070B1F 80%);
     background-size: cover; background-attachment: fixed; background-position: center;
-    display: flex; flex-direction: column; align-items: center;
   }
   #sky { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }
-  .app { position: relative; z-index: 1; }
-  /* planet kecil di pojok */
-  .planet { position: fixed; right: -60px; bottom: -60px; width: 260px; height: 260px; border-radius: 50%; z-index: 0;
-            background: radial-gradient(circle at 35% 35%, #FFB27A, #E8673C 45%, #7A2A1A 100%);
-            box-shadow: 0 0 60px rgba(255, 140, 66, .35); opacity: .85; pointer-events: none; }
-  .app { width: min(960px, 100%); padding: 20px; display: grid; grid-template-columns: 300px 1fr; gap: 24px; }
-  .app > * { min-width: 0; }
-  @media (max-width: 760px) {
-    .app { grid-template-columns: minmax(0, 1fr); padding: 12px; }
-    .spirit-box .spirit { width: 180px; height: 180px; }
-  }
+  .app { position: relative; z-index: 1; width: min(980px, 100%); margin: 0 auto; padding: 20px;
+         display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 24px; }
+  @media (max-width: 760px) { .app { grid-template-columns: minmax(0, 1fr); padding: 12px; } }
 
   /* ====== SPIRIT + ANIMASI ====== */
-  .spirit-box { display: flex; flex-direction: column; align-items: center; gap: 12px; padding-top: 12px; }
+  .spirit-box { display: flex; flex-direction: column; align-items: center; gap: 10px; padding-top: 8px; }
   .spirit-box h1 { font-family: 'Fredoka', Arial, sans-serif; margin: 0; font-size: 28px; color: var(--yellow); }
   .status { color: var(--soft); font-size: 15px; min-height: 22px; text-align: center; }
-  .spirit {
-    width: 260px; height: 260px; position: relative;
-    animation: float 4s ease-in-out infinite;          /* melayang pelan saat diam */
-  }
+  .spirit { width: 240px; height: 240px; position: relative; animation: float 4s ease-in-out infinite; }
+  @media (max-width: 760px) { .spirit-box .spirit { width: 160px; height: 160px; } }
   .spirit .body { width: 100%; height: 100%; transform-origin: 50% 90%; }
-  .spirit img {
-    width: 100%; height: 100%; object-fit: contain; display: block;
-    transform-origin: 50% 90%;
-    filter: drop-shadow(0 0 18px rgba(120,170,255,.35));
-    transition: filter .3s;
-  }
-  /* saat berbicara: badan "mengangguk" + cahaya lebih terang */
+  .spirit img { width: 100%; height: 100%; object-fit: contain; display: block; transform-origin: 50% 90%;
+                filter: drop-shadow(0 0 18px rgba(120,170,255,.35)); transition: filter .3s; }
   .spirit.talking .body { animation: talk .32s ease-in-out infinite alternate; }
   .spirit.talking img { filter: drop-shadow(0 0 30px rgba(140,200,255,.9)); }
-  /* setiap kata: dorongan kecil (dipicu dari JavaScript) */
   .spirit img.word { animation: word .16s ease-out; }
-  /* cahaya antena berkedip saat berbicara */
   .antenna { position: absolute; left: 50%; top: 8%; width: 26px; height: 26px; margin-left: -13px; border-radius: 50%;
              background: radial-gradient(circle, rgba(170,230,255,.95), rgba(170,230,255,0) 70%); opacity: 0; }
   .spirit.talking .antenna { animation: blink .5s ease-in-out infinite alternate; }
-  /* gelombang suara di bawah Spirit */
   .wave { display: flex; gap: 6px; height: 34px; align-items: center; opacity: .25; transition: opacity .3s; }
   .wave span { width: 8px; height: 8px; border-radius: 4px; background: var(--yellow); }
   .talking-wave { opacity: 1; }
@@ -83,16 +55,35 @@
   @keyframes blink { from { opacity: .2; } to { opacity: 1; } }
   @keyframes bar   { from { height: 6px; } to { height: 32px; } }
 
+  /* ====== PANEL KANAN ====== */
+  .panel { background: rgba(30, 42, 94, .82); backdrop-filter: blur(6px); border-radius: 28px; padding: 18px;
+           border: 2px solid #34407A; min-height: 72vh; display: flex; flex-direction: column; gap: 12px; }
+  .topbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .topbar .spacer { flex: 1; }
+  .pill { font: 700 14px 'Nunito', Arial, sans-serif; border: 2px solid var(--yellow); color: var(--yellow);
+          background: transparent; border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+  .pill.on { background: var(--yellow); color: var(--navy); }
+  .mode-title { font: 700 20px 'Fredoka', Arial, sans-serif; color: var(--cream); }
+
+  /* ====== MENU 3 TOMBOL ====== */
+  .home { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 24px; text-align: center; }
+  .home h2 { font: 700 30px 'Fredoka', Arial, sans-serif; margin: 0; color: var(--cream); }
+  .worlds { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  @media (max-width: 560px) { .worlds { grid-template-columns: minmax(0, 1fr); } }
+  .world { background: rgba(19, 26, 63, .7); border: 2px solid #34407A; border-radius: 24px; padding: 18px 12px;
+           color: var(--cream); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 10px;
+           transition: transform .2s, border-color .2s, box-shadow .2s; font-family: 'Nunito', Arial, sans-serif; }
+  .world:hover, .world:focus-visible { transform: translateY(-6px); border-color: var(--yellow); box-shadow: 0 10px 30px rgba(255,209,102,.25); outline: none; }
+  .world svg { width: 120px; height: 120px; animation: spinSlow 30s linear infinite; }
+  .world:nth-child(2) svg { animation-duration: 40s; } .world:nth-child(3) svg { animation: pulse 4s ease-in-out infinite; }
+  .world b { font: 700 22px 'Fredoka', Arial, sans-serif; color: var(--yellow); }
+  .world span { font-size: 14px; color: var(--soft); }
+  @keyframes spinSlow { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+
   /* ====== CHAT ====== */
-  .chat { background: rgba(30, 42, 94, .82); backdrop-filter: blur(6px); border-radius: 28px; padding: 18px; display: flex; flex-direction: column; gap: 12px;
-          border: 2px solid #34407A; min-height: 70vh; }
-  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
-  .toolbar button { font: 700 14px 'Nunito', Arial, sans-serif; border: 2px solid var(--yellow); color: var(--yellow);
-                    background: transparent; border-radius: 999px; padding: 6px 14px; cursor: pointer; }
-  .toolbar button.on { background: var(--yellow); color: var(--navy); }
-  .toolbar select { font: 700 14px 'Nunito', Arial, sans-serif; color: var(--navy); background: var(--cream);
-                    border: none; border-radius: 999px; padding: 6px 12px; max-width: 220px; }
-  .messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 4px; max-height: 60vh; }
+  .chat { flex: 1; display: none; flex-direction: column; gap: 12px; min-height: 0; }
+  .messages { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; padding: 4px; max-height: 58vh; }
   .msg { max-width: 85%; padding: 12px 16px; line-height: 1.5; font-size: 17px; color: var(--navy); white-space: pre-wrap; }
   .msg.kid { align-self: flex-end; background: var(--orange); border-radius: 20px 20px 6px 20px; }
   .msg.bot { align-self: flex-start; background: var(--cream); border-radius: 20px 20px 20px 6px; }
@@ -102,7 +93,7 @@
            border: 2px solid #E0A93A; border-radius: 999px; padding: 2px 10px; }
   .label.general { color: #3d3f5c; border-color: #9aa0c3; border-style: dashed; }
   .composer { display: flex; gap: 8px; }
-  .composer input { flex: 1; font: 17px 'Nunito', Arial, sans-serif; padding: 12px 16px; border-radius: 999px; border: none; }
+  .composer input { flex: 1; min-width: 0; font: 17px 'Nunito', Arial, sans-serif; padding: 12px 16px; border-radius: 999px; border: none; }
   .composer button { font: 700 17px 'Fredoka', Arial, sans-serif; border: none; border-radius: 999px; padding: 0 18px; cursor: pointer;
                      background: var(--yellow); color: var(--navy); }
   .composer button.mic.listening { background: var(--orange); animation: blink .6s infinite alternate; }
@@ -111,7 +102,6 @@
 </head>
 <body>
 <canvas id="sky" aria-hidden="true"></canvas>
-<div class="planet" aria-hidden="true"></div>
 <div class="app">
 
   <!-- ====== KIRI: SPIRIT ====== -->
@@ -122,72 +112,121 @@
     </div>
     <div class="wave" id="wave"><span></span><span></span><span></span><span></span><span></span></div>
     <h1>Explorer Spirit</h1>
-    <div class="status" id="status">Hi! Ask me about the things left on the Moon or Mars.</div>
+    <div class="status" id="status"></div>
   </div>
 
-  <!-- ====== KANAN: CHAT ====== -->
-  <div class="chat">
-    <div class="toolbar">
-      <button id="langEn" class="on">English</button>
-      <button id="langId">Bahasa Indonesia</button>
-      <button id="voiceBtn" class="on">🔊 Voice: ON</button>
-      <select id="presetSel" aria-label="Robot style"></select>
-      <select id="voiceSel" aria-label="Voice"></select>
-      <button id="testBtn">▶ Test</button>
+  <!-- ====== KANAN ====== -->
+  <div class="panel">
+    <div class="topbar">
+      <button class="pill" id="backBtn" style="display:none"></button>
+      <span class="mode-title" id="modeTitle"></span>
+      <span class="spacer"></span>
+      <button class="pill on" id="voiceBtn" aria-label="Sound on/off">🔊</button>
+      <button class="pill on" id="langEn">English</button>
+      <button class="pill" id="langId">Bahasa Indonesia</button>
     </div>
-    <div class="messages" id="messages"></div>
-    <form class="composer" id="form">
-      <button type="button" class="mic" id="micBtn" title="Speak">🎤</button>
-      <input id="input" autocomplete="off" maxlength="300" placeholder="Example: What is the Lunar Roving Vehicle?">
-      <button type="submit" id="sendBtn">Send</button>
-    </form>
+
+    <!-- Menu 3 tombol -->
+    <div class="home" id="home">
+      <h2 id="homeTitle"></h2>
+      <div class="worlds">
+        <button class="world" data-mode="moon" aria-describedby="sub-moon">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <defs><radialGradient id="gMoon" cx="38%" cy="35%" r="70%"><stop offset="0" stop-color="#F4F1EA"/><stop offset=".6" stop-color="#C9C6BE"/><stop offset="1" stop-color="#7E7B75"/></radialGradient></defs>
+            <circle cx="60" cy="60" r="50" fill="url(#gMoon)"/>
+            <circle cx="42" cy="44" r="9" fill="#A8A49C" opacity=".8"/><circle cx="74" cy="38" r="6" fill="#A8A49C" opacity=".7"/>
+            <circle cx="70" cy="74" r="12" fill="#A8A49C" opacity=".75"/><circle cx="40" cy="78" r="5" fill="#A8A49C" opacity=".7"/>
+            <circle cx="88" cy="60" r="4" fill="#A8A49C" opacity=".6"/>
+          </svg>
+          <b id="lblMoon"></b><span id="sub-moon"></span>
+        </button>
+        <button class="world" data-mode="mars" aria-describedby="sub-mars">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <defs><radialGradient id="gMars" cx="38%" cy="35%" r="70%"><stop offset="0" stop-color="#FFB27A"/><stop offset=".55" stop-color="#E8673C"/><stop offset="1" stop-color="#7A2A1A"/></radialGradient></defs>
+            <circle cx="60" cy="60" r="50" fill="url(#gMars)"/>
+            <path d="M22 52 C40 44 56 58 76 50 S100 46 104 52" stroke="#A8432A" stroke-width="7" fill="none" opacity=".55" stroke-linecap="round"/>
+            <circle cx="46" cy="76" r="7" fill="#B9502F" opacity=".7"/><circle cx="78" cy="78" r="4" fill="#B9502F" opacity=".7"/>
+            <ellipse cx="60" cy="14" rx="14" ry="4" fill="#FFF6E6" opacity=".85"/>
+          </svg>
+          <b id="lblMars"></b><span id="sub-mars"></span>
+        </button>
+        <button class="world" data-mode="explore" aria-describedby="sub-explore">
+          <svg viewBox="0 0 120 120" aria-hidden="true">
+            <defs><radialGradient id="gGal" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#FFF6E6"/><stop offset=".25" stop-color="#FFD9A0" stop-opacity=".9"/><stop offset=".6" stop-color="#9F7AEA" stop-opacity=".45"/><stop offset="1" stop-color="#4FD1C5" stop-opacity="0"/></radialGradient></defs>
+            <g transform="rotate(-30 60 60)">
+              <ellipse cx="60" cy="60" rx="56" ry="22" fill="url(#gGal)"/>
+              <ellipse cx="60" cy="60" rx="40" ry="14" fill="none" stroke="#C9B6FF" stroke-width="2" opacity=".6"/>
+              <ellipse cx="60" cy="60" rx="26" ry="9" fill="none" stroke="#FFE3B3" stroke-width="2" opacity=".7"/>
+              <ellipse cx="60" cy="60" rx="10" ry="5" fill="#FFF6E6"/>
+            </g>
+            <circle cx="20" cy="24" r="1.8" fill="#FFF6E6"/><circle cx="98" cy="96" r="1.6" fill="#FFF6E6"/><circle cx="96" cy="22" r="1.2" fill="#FFF6E6"/>
+          </svg>
+          <b id="lblExplore">Explore More</b><span id="sub-explore"></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Chat -->
+    <div class="chat" id="chat">
+      <div class="messages" id="messages"></div>
+      <form class="composer" id="form">
+        <button type="button" class="mic" id="micBtn">🎤</button>
+        <input id="input" autocomplete="off" maxlength="300">
+        <button type="submit" id="sendBtn"></button>
+      </form>
+    </div>
   </div>
 </div>
 
 <script>
 /* =========================================================
-   PENGATURAN SUARA ROBOT (boleh kamu ubah angkanya)
-   pitch: 0.1–2  (makin tinggi = makin "robot imut")
-   rate : 0.5–2  (kecepatan bicara)
+   SUARA ROBOT (tidak ditampilkan di halaman, diatur di sini)
+   English          : gaya "Speedy robot" + suara bernama "Mark"
+   Bahasa Indonesia : gaya "Speedy robot" + suara bawaan perangkat
+   pitch 0.1–2 (tinggi nada), rate 0.5–2 (kecepatan)
    ========================================================= */
-const VOICE = { pitch: 1.6, rate: 0.95, volume: 1, beep: true };
+const VOICE = {
+  en: { pitch: 1.5, rate: 1.3, voiceName: "Mark" },
+  id: { pitch: 1.5, rate: 1.3, voiceName: "" },      // "" = suara bawaan
+  volume: 1, beep: true,
+};
 
-/* GAYA SUARA ROBOT (muncul di menu). Boleh tambah gaya baru dengan pola yang sama. */
-const PRESETS = [
-  { id: "friendly", en: "🤖 Friendly robot", id_: "🤖 Robot ramah",   pitch: 1.6, rate: 0.95 },
-  { id: "tiny",     en: "🐣 Tiny robot",     id_: "🐣 Robot mungil",  pitch: 2.0, rate: 1.1  },
-  { id: "big",      en: "🦾 Big robot",      id_: "🦾 Robot besar",   pitch: 0.4, rate: 0.85 },
-  { id: "calm",     en: "🌙 Calm robot",     id_: "🌙 Robot tenang",  pitch: 1.2, rate: 0.85 },
-  { id: "fast",     en: "⚡ Speedy robot",   id_: "⚡ Robot cepat",   pitch: 1.5, rate: 1.3  },
-];
-let presetId = "friendly", chosenVoice = "";          // "" = pilih otomatis
-try { presetId = localStorage.getItem("spiritPreset") || presetId; chosenVoice = localStorage.getItem("spiritVoice") || ""; } catch (e) {}
-
-let lang = "en";          // bahasa awal: "en" (English). Pilihan lain: "id" (Bahasa Indonesia)
-const DEBUG = location.search.includes("debug");   // buka situs dengan ?debug untuk melihat pesan error
+let lang = "en";            // bahasa awal: "en". Pilihan lain: "id"
+let mode = null;            // "moon" | "mars" | "explore"
+let history = [];           // percakapan di mode ini (dikirim ke otak supaya mengerti jawaban "yes"/"ya")
 let voiceOn = true;
+const DEBUG = location.search.includes("debug");   // buka situs dengan ?debug untuk melihat pesan error
 const $ = (id) => document.getElementById(id);
 const spirit = $("spirit"), spiritImg = $("spiritImg"), wave = $("wave");
 spiritImg.addEventListener("animationend", () => spiritImg.classList.remove("word"));
 
-/* ---------- Teks antarmuka 2 bahasa ---------- */
+/* ---------- Teks 2 bahasa ---------- */
 const UI = {
-  id: { hello: "Halo! Aku Explorer Spirit. Aku menjaga benda-benda yang ditinggalkan para penjelajah di Bulan dan Mars. Mau dengar cerita tentang apa?",
-        think: "Spirit sedang mengingat-ingat…", ready: "Tanya aku lagi!", listen: "Aku mendengarkan…",
-        placeholder: "Contoh: Apa itu Lunar Roving Vehicle?", voiceOn: "🔊 Suara: ON", voiceOff: "🔇 Suara: OFF",
-        send: "Kirim", error: "Sinyal dari luar angkasa sedang lemah. Coba lagi sebentar, ya!", photo: "Foto: NASA Image Library",
-        source: "Sumber: ", general: "Sumber: AI General Knowledge (pengetahuan sains umum, bukan data NASA)",
-        autoVoice: "🔈 Suara bawaan", test: "Bip bup! Halo, aku Explorer Spirit. Begini suaraku sekarang." },
-  en: { hello: "Hi! I'm Explorer Spirit. I look after the things explorers left behind on the Moon and Mars. What story would you like to hear?",
-        think: "Spirit is remembering…", ready: "Ask me another!", listen: "I'm listening…",
-        placeholder: "Example: What is the Lunar Roving Vehicle?", voiceOn: "🔊 Voice: ON", voiceOff: "🔇 Voice: OFF",
-        send: "Send", error: "My signal from space is weak right now. Please try again in a moment!", photo: "Photo: NASA Image Library",
-        source: "Source: ", general: "Source: AI General Knowledge (general space science, not NASA data)",
-        autoVoice: "🔈 Default voice", test: "Beep boop! Hi, I'm Explorer Spirit. This is how I sound now." }
+  en: { home: "Where do you want to explore?", hello: "Hi! Pick a place to explore.",
+        moon: "Moon", mars: "Mars", explore: "Explore More",
+        subMoon: "Objects left on the Moon", subMars: "Objects left on Mars", subExplore: "Ask anything about space",
+        firstMoon: "Hi, I'm Explorer Spirit! Do you want to know what objects were left behind on the Moon?",
+        firstMars: "Hi, I'm Explorer Spirit! Do you want to know what objects were left behind on Mars?",
+        firstExplore: "Hi, I'm Explorer Spirit! What would you like to know about space?",
+        back: "← Menu", think: "Spirit is remembering…", ready: "Ask me another!", listen: "I'm listening…",
+        placeholder: "Type your question…", send: "Send",
+        error: "My signal from space is weak right now. Please try again in a moment!", photo: "Photo: NASA Image Library",
+        source: "Source: ", general: "Source: AI General Knowledge (general space science, not NASA data)" },
+  id: { home: "Mau menjelajah ke mana?", hello: "Halo! Pilih tempat yang mau dijelajahi.",
+        moon: "Bulan", mars: "Mars", explore: "Explore More",
+        subMoon: "Benda yang ditinggalkan di Bulan", subMars: "Benda yang ditinggalkan di Mars", subExplore: "Tanya apa saja tentang luar angkasa",
+        firstMoon: "Hai, aku Explorer Spirit! Kamu mau tahu benda apa saja yang ditinggalkan di Bulan?",
+        firstMars: "Hai, aku Explorer Spirit! Kamu mau tahu benda apa saja yang ditinggalkan di Mars?",
+        firstExplore: "Hai, aku Explorer Spirit! Apa yang ingin kamu ketahui tentang luar angkasa?",
+        back: "← Menu", think: "Spirit sedang mengingat-ingat…", ready: "Tanya aku lagi!", listen: "Aku mendengarkan…",
+        placeholder: "Ketik pertanyaanmu…", send: "Kirim",
+        error: "Sinyal dari luar angkasa sedang lemah. Coba lagi sebentar, ya!", photo: "Foto: NASA Image Library",
+        source: "Sumber: ", general: "Sumber: AI General Knowledge (pengetahuan sains umum, bukan data NASA)" },
 };
 const t = (k) => UI[lang][k];
+const FIRST = { moon: "firstMoon", mars: "firstMars", explore: "firstExplore" };
 
-/* ---------- Menampilkan pesan di chat ---------- */
+/* ---------- Pesan di chat ---------- */
 function addMessage(text, who, extra = {}) {
   const div = document.createElement("div");
   div.className = "msg " + who;
@@ -203,11 +242,8 @@ function addMessage(text, who, extra = {}) {
   }
   if (extra.label && extra.label !== "None") {
     const l = document.createElement("span"); l.className = "label";
-    if (extra.label === "AI General Knowledge") {          // bukan data NASA: diberi warna lain supaya jelas
-      l.classList.add("general"); l.textContent = t("general");
-    } else {
-      l.textContent = t("source") + extra.label;
-    }
+    if (extra.label === "AI General Knowledge") { l.classList.add("general"); l.textContent = t("general"); }
+    else l.textContent = t("source") + extra.label;
     div.appendChild(document.createElement("br")); div.appendChild(l);
   }
   $("messages").appendChild(div);
@@ -215,24 +251,26 @@ function addMessage(text, who, extra = {}) {
 }
 
 /* =========================================================
-   SUARA ROBOT — memakai text-to-speech bawaan browser (GRATIS)
+   SUARA ROBOT — text-to-speech bawaan browser (GRATIS)
    ========================================================= */
 let voices = [];
-function loadVoices() { voices = speechSynthesis.getVoices(); fillVoiceMenu(); }
+function loadVoices() { voices = speechSynthesis.getVoices(); }
 if ("speechSynthesis" in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
 
 function pickVoice() {
   const code = lang === "id" ? "id" : "en";
-  const manual = voices.find(v => v.name === chosenVoice && v.lang.toLowerCase().startsWith(code));
-  if (manual) return manual;                        // suara yang dipilih di menu
-  // utamakan suara Google (lebih jernih), lalu suara apa pun yang bahasanya cocok
-  return voices.find(v => v.lang.toLowerCase().startsWith(code) && /google/i.test(v.name))
-      || voices.find(v => v.lang.toLowerCase().startsWith(code)) || null;
+  const want = VOICE[lang].voiceName;
+  const sameLang = voices.filter(v => v.lang.toLowerCase().startsWith(code));
+  if (want) {
+    const named = sameLang.find(v => new RegExp("\\b" + want + "\\b", "i").test(v.name));
+    if (named) return named;                     // contoh: "Microsoft Mark - English (United States)"
+  }
+  // suara bawaan: utamakan suara Google (jernih), lalu suara default perangkat, lalu yang pertama
+  return sameLang.find(v => /google/i.test(v.name)) || sameLang.find(v => v.default) || sameLang[0] || null;
 }
 
-/* bunyi "bip-bup" robot sebelum bicara (dibuat dengan Web Audio, gratis) */
 let audioCtx;
-function beepBoop() {
+function beepBoop() {   // bunyi "bip-bup" sebelum bicara
   return new Promise((done) => {
     try {
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
@@ -252,24 +290,20 @@ function beepBoop() {
 
 function startTalking() { spirit.classList.add("talking"); wave.classList.add("talking-wave"); }
 function stopTalking()  { spirit.classList.remove("talking"); wave.classList.remove("talking-wave"); }
-function wordPop() {      // dorongan kecil di setiap kata = efek "mulut bergerak"
-  spiritImg.classList.remove("word"); void spiritImg.offsetWidth; spiritImg.classList.add("word");
-}
+function wordPop() { spiritImg.classList.remove("word"); void spiritImg.offsetWidth; spiritImg.classList.add("word"); }
 
 async function speak(text) {
   if (!voiceOn || !("speechSynthesis" in window) || !text) return;
   speechSynthesis.cancel();
   if (VOICE.beep) await beepBoop();
-  // dipecah per kalimat supaya Chrome tidak berhenti di tengah teks panjang
-  const parts = text.match(/[^.!?…]+[.!?…]*/g) || [text];
-  const voice = pickVoice();
+  const parts = text.match(/[^.!?…]+[.!?…]*/g) || [text];   // per kalimat, supaya Chrome tidak berhenti di tengah
+  const voice = pickVoice(), set = VOICE[lang];
   startTalking();
   parts.forEach((p, i) => {
     const u = new SpeechSynthesisUtterance(p.trim());
     u.lang = lang === "id" ? "id-ID" : "en-US";
     if (voice) u.voice = voice;
-    const pr = PRESETS.find(x => x.id === presetId) || VOICE;
-    u.pitch = pr.pitch; u.rate = pr.rate; u.volume = VOICE.volume;
+    u.pitch = set.pitch; u.rate = set.rate; u.volume = VOICE.volume;
     u.onboundary = (e) => { if (e.name === "word") wordPop(); };
     if (i === parts.length - 1) { u.onend = stopTalking; u.onerror = stopTalking; }
     speechSynthesis.speak(u);
@@ -277,7 +311,7 @@ async function speak(text) {
 }
 
 /* =========================================================
-   MIKROFON — anak bisa bicara (Chrome/Edge, GRATIS)
+   MIKROFON (Chrome/Edge, GRATIS)
    ========================================================= */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 let rec = null;
@@ -286,7 +320,7 @@ if (SR) {
   rec.onresult = (e) => { $("input").value = e.results[0][0].transcript; $("form").requestSubmit(); };
   rec.onend = () => { $("micBtn").classList.remove("listening"); $("status").textContent = t("ready"); };
 } else {
-  $("micBtn").style.display = "none";          // browser tidak mendukung → tombol disembunyikan
+  $("micBtn").style.display = "none";
 }
 $("micBtn").onclick = () => {
   if (!rec) return;
@@ -297,78 +331,91 @@ $("micBtn").onclick = () => {
 };
 
 /* =========================================================
-   KIRIM PERTANYAAN → Netlify Function → NASA + Gemini
+   MENU 3 TOMBOL → CHAT
    ========================================================= */
+function openMode(m) {
+  mode = m; history = [];
+  $("messages").innerHTML = "";
+  $("home").style.display = "none"; $("chat").style.display = "flex"; $("backBtn").style.display = "inline-block";
+  $("modeTitle").textContent = t(m);
+  const first = t(FIRST[m]);
+  addMessage(first, "bot");
+  history.push({ role: "spirit", text: first });
+  speak(first);
+  $("status").textContent = t("ready");
+  $("input").focus();
+}
+function goHome() {
+  mode = null; speechSynthesis.cancel(); stopTalking();
+  $("chat").style.display = "none"; $("home").style.display = "flex"; $("backBtn").style.display = "none";
+  $("modeTitle").textContent = ""; $("status").textContent = t("hello");
+}
+document.querySelectorAll(".world").forEach(b => b.onclick = () => openMode(b.dataset.mode));
+$("backBtn").onclick = goHome;
+
+/* ---------- Kirim pertanyaan → otak chatbot ---------- */
 $("form").onsubmit = async (e) => {
   e.preventDefault();
   const question = $("input").value.trim();
-  if (!question) return;
+  if (!question || !mode) return;
   addMessage(question, "kid");
   $("input").value = ""; $("sendBtn").disabled = true;
   $("status").textContent = t("think");
+  const sentHistory = history.slice(-6);
+  history.push({ role: "kid", text: question });
   try {
     const res = await fetch("/.netlify/functions/spirit", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, lang })
+      body: JSON.stringify({ question, lang, mode, history: sentHistory })
     });
-    const data = await res.json();
+    const raw = await res.text();
+    let data;
+    try { data = JSON.parse(raw); }
+    catch (x) {   // bukan JSON = otak tidak ditemukan (404) atau dihentikan Netlify (timeout)
+      data = { devError: `Server menjawab HTTP ${res.status} tanpa JSON. ` +
+        (res.status === 404 ? "Otak chatbot (netlify/functions/spirit.mjs) tidak ditemukan. Cek menu Functions di Netlify."
+         : res.status >= 500 ? "Kemungkinan otak chatbot error saat dimuat atau melewati batas 10 detik. Cek Logs > Functions di Netlify."
+         : "") };
+    }
     if (data.devError) {
       console.warn("Pesan untuk developer:", data.devError);   // lihat di Console (F12)
       if (DEBUG) addMessage("⚙️ Untuk developer: " + data.devError, "bot");
     }
     const answer = data.answer || t("error");
     addMessage(answer, "bot", { image: data.image, label: data.source_label });
+    history.push({ role: "spirit", text: answer });
     speak(answer);
   } catch (err) {
     console.error(err);
+    if (DEBUG) addMessage("⚙️ Untuk developer: koneksi gagal (" + err.message + ")", "bot");
     addMessage(t("error"), "bot");
   } finally {
     $("sendBtn").disabled = false; $("status").textContent = t("ready");
   }
 };
 
-/* ---------- Menu gaya robot & pilihan suara ---------- */
-function fillPresetMenu() {
-  const sel = $("presetSel"); sel.innerHTML = "";
-  PRESETS.forEach(p => { const o = document.createElement("option"); o.value = p.id; o.textContent = lang === "id" ? p.id_ : p.en; sel.appendChild(o); });
-  sel.value = presetId;
-}
-function fillVoiceMenu() {
-  const sel = $("voiceSel"); if (!sel) return;
-  const code = lang === "id" ? "id" : "en";
-  sel.innerHTML = "";
-  const auto = document.createElement("option"); auto.value = ""; auto.textContent = t("autoVoice"); sel.appendChild(auto);
-  voices.filter(v => v.lang.toLowerCase().startsWith(code)).forEach(v => {
-    const o = document.createElement("option"); o.value = v.name; o.textContent = v.name.replace(/^(Microsoft|Google)\s*/, "") + " (" + v.lang + ")";
-    sel.appendChild(o);
-  });
-  sel.value = [...sel.options].some(o => o.value === chosenVoice) ? chosenVoice : "";
-}
-$("presetSel").onchange = (e) => { presetId = e.target.value; try { localStorage.setItem("spiritPreset", presetId); } catch (x) {} speak(t("test")); };
-$("voiceSel").onchange = (e) => { chosenVoice = e.target.value; try { localStorage.setItem("spiritVoice", chosenVoice); } catch (x) {} speak(t("test")); };
-$("testBtn").onclick = () => speak(t("test"));
-
-/* ---------- Tombol bahasa & suara ---------- */
+/* ---------- Bahasa ---------- */
 function setLang(l) {
   lang = l;
-  $("langId").classList.toggle("on", l === "id"); $("langEn").classList.toggle("on", l === "en");
-  $("input").placeholder = t("placeholder"); $("sendBtn").textContent = t("send");
-  $("voiceBtn").textContent = voiceOn ? t("voiceOn") : t("voiceOff");
+  $("langEn").classList.toggle("on", l === "en"); $("langId").classList.toggle("on", l === "id");
+  $("homeTitle").textContent = t("home");
+  $("lblMoon").textContent = t("moon"); $("lblMars").textContent = t("mars"); $("lblExplore").textContent = t("explore");
+  $("sub-moon").textContent = t("subMoon"); $("sub-mars").textContent = t("subMars"); $("sub-explore").textContent = t("subExplore");
+  $("backBtn").textContent = t("back"); $("input").placeholder = t("placeholder"); $("sendBtn").textContent = t("send");
+  $("micBtn").title = l === "id" ? "Bicara" : "Speak";
+  if (mode) $("modeTitle").textContent = t(mode); else $("status").textContent = t("hello");
   document.documentElement.lang = l;
-  fillPresetMenu(); fillVoiceMenu();
 }
-$("langId").onclick = () => setLang("id");
-$("langEn").onclick = () => setLang("en");
 $("voiceBtn").onclick = () => {
   voiceOn = !voiceOn;
   if (!voiceOn) { speechSynthesis.cancel(); stopTalking(); }
-  $("voiceBtn").classList.toggle("on", voiceOn);
-  $("voiceBtn").textContent = voiceOn ? t("voiceOn") : t("voiceOff");
+  $("voiceBtn").classList.toggle("on", voiceOn); $("voiceBtn").textContent = voiceOn ? "🔊" : "🔇";
 };
+$("langEn").onclick = () => setLang("en");
+$("langId").onclick = () => setLang("id");
 
 /* =========================================================
    LANGIT BERBINTANG (bintang berkelip + bintang jatuh)
-   Jumlah bintang: ubah angka STAR_COUNT
    ========================================================= */
 const STAR_COUNT = 220;
 const sky = $("sky"), ctx = sky.getContext("2d");
@@ -386,8 +433,7 @@ function drawSky() {
   ctx.clearRect(0, 0, W, H);
   for (const s of stars) {
     if (!calm) { s.tw += s.sp; s.x -= s.drift; if (s.x < -2) s.x = W + 2; }
-    const a = 0.45 + Math.sin(s.tw) * 0.4;
-    ctx.globalAlpha = Math.max(0.08, a); ctx.fillStyle = "#FFF6E6";
+    ctx.globalAlpha = Math.max(0.08, 0.45 + Math.sin(s.tw) * 0.4); ctx.fillStyle = "#FFF6E6";
     ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill();
   }
   if (!calm) {
@@ -405,14 +451,8 @@ function drawSky() {
   requestAnimationFrame(drawSky);
 }
 addEventListener("resize", resizeSky); resizeSky(); drawSky();
-fillPresetMenu(); fillVoiceMenu();
 
-/* Sapaan pertama (suara baru boleh diputar setelah anak menyentuh halaman — aturan browser) */
-addMessage(t("hello"), "bot");
-document.addEventListener("click", function firstTouch() {
-  document.removeEventListener("click", firstTouch);
-  if (!$("messages").dataset.greeted) { $("messages").dataset.greeted = "1"; speak(t("hello")); }
-}, { once: true });
+setLang("en");
 </script>
 </body>
 </html>
