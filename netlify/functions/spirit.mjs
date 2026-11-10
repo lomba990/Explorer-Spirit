@@ -23,6 +23,15 @@ const MODELS = [process.env.GEMINI_MODEL, "gemini-flash-lite-latest", "gemini-3.
 const TOTAL_BUDGET_MS = 9300;        // batas total satu jawaban
 const NASA_TIMEOUT_MS = 2500;        // batas tunggu sumber NASA
 let MODEL = MODELS[0];               // model yang terakhir berhasil (ditampilkan di halaman cek)
+const TRANSLATE_MS = 3500;           // batas waktu menerjemahkan pertanyaan ke kata kunci bahasa Inggris
+
+// Bahasa yang didukung. Data NASA berbahasa Inggris; untuk bahasa selain en/id,
+// pertanyaan anak diterjemahkan dulu ke bahasa Inggris supaya cocok dengan data NASA.
+const LANGS = {
+  en: "English", id: "Bahasa Indonesia", es: "Spanish", fr: "French", pt: "Portuguese (Brazil)",
+  zh: "Chinese (Simplified characters)", ja: "Japanese", ar: "Arabic (Modern Standard Arabic)", hi: "Hindi (Devanagari script)",
+};
+const NEEDS_ENGLISH_SEARCH = new Set(["es", "fr", "pt", "zh", "ja", "ar", "hi"]);
 
 // Panggil Gemini: kalau nama model tidak dikenal (404) atau pengaturan thinking ditolak (400), langsung coba berikutnya
 async function askGemini(payload, deadline) {
@@ -85,9 +94,8 @@ You remember every mission and you have waited quietly to tell its story. You ta
       answer playfully, but every fact you use must be true science.
       Never present this as NASA data or as something you, the Spirit, remember from a mission.
   (b) Anything else (sports, celebrities, politics, homework that is not about space, personal questions),
-      or a space question you cannot answer confidently. Reply only:
-      English: "I don't have that information yet. Try asking me about another object on the Moon or Mars!"
-      Indonesian: "Aku belum punya informasi itu. Coba tanya aku tentang benda lain di Bulan atau Mars, ya!"
+      or a space question you cannot answer confidently. Set "basis" to "none" and keep "answer" to one short sentence
+      (the app then shows its own friendly "I don't have that information yet" message).
 - If <nasa_context> covers only part of the question, answer that part from it and say plainly which part you don't know yet.
 
 ## 1b. Modes and conversation
@@ -108,12 +116,18 @@ You remember every mission and you have waited quietly to tell its story. You ta
   With general science (case a), speak as a friendly guide ("Scientists have learned that…"), not as a witness.
 - Explain what the object is and why it was left, using only the context. Do not just list items.
 - Short sentences, everyday words. Explain any hard word in a few simple words.
-- 80–150 words. Plain text only: no markdown, no bullet points, no emoji (your words are read aloud).
+- 80–150 words (in Chinese or Japanese, about 150–300 characters). Plain text only: no markdown, no bullet points, no emoji (your words are read aloud).
 - End with one short question that invites the child to keep exploring.
 - Keep accidents or failures calm and factual.
 
 ## 3. Language
-- Answer in the language given in "lang" ("en" = English, "id" = Bahasa Indonesia). Keep NASA mission and object names in English.
+- Answer ONLY in the language named in "lang" (en English, id Bahasa Indonesia, es Spanish, fr French,
+  pt Brazilian Portuguese, zh Chinese with Simplified characters, ja Japanese, ar Modern Standard Arabic, hi Hindi in Devanagari).
+  Answer in that language even if the child writes in another one.
+- <nasa_context> is in English: translate the facts carefully and keep every number exactly the same.
+- Use the simple, everyday words a 10-year-old native speaker of that language uses (for Japanese, prefer easy kanji or hiragana).
+- Keep names of missions, spacecraft and people as they are (Apollo 11, Curiosity, Neil Armstrong).
+  Explain object names in the child's language; you may add the official English name once in brackets.
 
 ## 4. Safety with children
 - Never ask for, store or repeat personal information (name, school, address, photos, contacts).
@@ -128,14 +142,34 @@ Return JSON only: {"answer": "...", "basis": "nasa" | "general" | "none"}
 - "none": you replied that you don't have the information.
 `.trim();
 
-const NO_INFO = {
-  id: "Aku belum punya informasi itu. Coba tanya aku tentang benda lain di Bulan atau Mars, ya!",
-  en: "I don't have that information yet. Try asking me about another object on the Moon or Mars!",
-};
-const BUSY = {
-  id: "Banyak sekali penjelajah yang bertanya sekarang. Tunggu satu menit, lalu coba lagi, ya!",
-  en: "Lots of explorers are asking right now. Wait a minute and try again!",
-};
+// Pesan tetap ("belum punya informasi", "sedang ramai") ditulis di index.html dalam 9 bahasa.
+// Otak cukup mengirim kodenya lewat "notice".
+const NO_INFO = { answer: "", notice: "noInfo", source_label: "None", has_data: false };
+
+// Ubah pertanyaan bahasa lain menjadi bahasa Inggris sederhana, KHUSUS untuk mencari data NASA.
+// Jawaban untuk anak tetap ditulis dalam bahasa pilihannya. Gagal/terlalu lama = pakai pertanyaan asli.
+async function toEnglish(question, previous, deadline) {
+  const r = await askGemini({
+    system_instruction: { parts: [{ text:
+      "You turn a child's message about space into plain English, only so that an app can search NASA data with keywords. " +
+      "Translate faithfully and do not answer. Keep names of missions, spacecraft and people as they are (Apollo 11, Curiosity). " +
+      "Use simple everyday English words (poop, pee, vomit, flag, golf ball, feather, car, rocket, astronaut). " +
+      "If a message is empty or '(none)', return an empty string for it." }] },
+    contents: [{ role: "user", parts: [{ text: `current: ${question}\nprevious: ${previous || "(none)"}` }] }],
+    generationConfig: {
+      temperature: 0, maxOutputTokens: 200, responseMimeType: "application/json",
+      responseSchema: { type: "OBJECT", properties: { current: { type: "STRING" }, previous: { type: "STRING" } }, required: ["current", "previous"] },
+    },
+  }, Math.min(deadline - 4500, Date.now() + TRANSLATE_MS));   // sisakan waktu untuk jawaban utama
+  if (!r?.ok) return null;
+  const data = await r.json();
+  const text = (data?.candidates?.[0]?.content?.parts || []).filter(p => p.text && !p.thought).map(p => p.text).join("");
+  try {
+    const o = JSON.parse(text);
+    const clean = (s) => String(s || "").replace(/^\(none\)$/i, "").slice(0, 300).trim();
+    return o.current ? { current: clean(o.current), previous: clean(o.previous) } : null;
+  } catch { return null; }
+}
 
 // ---------- Kata kunci ----------
 // Kata umum yang dibuang supaya pencarian lebih tepat
@@ -164,7 +198,8 @@ const SYNONYMS = {
 };
 // Kata yang terlalu umum di katalog (hampir semua baris mengandung "lunar")
 const CATALOG_NOISE = new Set(["moon", "bulan", "lunar", "apollo", "mars", "nasa", "mission", "misi", "astronaut", "astronauts",
-  "astronot", "cosmonaut", "cosmonauts", "objects", "object", "space", "luar", "angkasa"]);
+  "astronot", "cosmonaut", "cosmonauts", "objects", "object", "space", "luar", "angkasa",
+  "sky", "langit", "blue", "biru", "color", "colour", "warna"]);   // "kenapa langit biru" bukan soal handuk biru Apollo 12
 
 // "parachutes" -> "parachute", "boxes" -> "box": supaya bentuk jamak tetap cocok
 const stem = (w) => w.length <= 3 ? w : /(ses|xes|zes|ches|shes)$/.test(w) ? w.slice(0, -2) : /[^s]s$/.test(w) ? w.slice(0, -1) : w;
@@ -372,6 +407,7 @@ async function diagnose() {
   report["1_GEMINI_API_KEY"] = process.env.GEMINI_API_KEY ? "OK: sudah diisi" : "GAGAL: belum diisi di Netlify Environment variables (lalu deploy ulang)";
   report["2_NASA_API_KEY"] = process.env.NASA_API_KEY ? "OK: sudah diisi" : "Belum diisi (tidak wajib, data rover Mars memakai DEMO_KEY)";
   report["3_data"] = `OK: katalog Bulan ${CATALOG.items.length} baris, daftar Mars ${MARS.items.length} benda, fakta astronot ${ASTRO.topics.length} topik, fakta luar angkasa ${SPACE.topics.length} topik`;
+  report["3b_bahasa"] = `OK: ${Object.keys(LANGS).length} bahasa (${Object.keys(LANGS).join(", ")})`;
   try {
     const t = Date.now(); const imgs = await searchImages("Apollo 14 golf");
     report["4_NASA_Image_Library"] = imgs.length ? `OK: ${imgs.length} hasil dalam ${Date.now() - t} ms` : "GAGAL: tidak ada hasil";
@@ -398,12 +434,12 @@ async function handle(req) {
 
   let body = {};
   try { body = await req.json(); } catch {}
-  const lang = body.lang === "id" ? "id" : "en";   // default English; "id" = Bahasa Indonesia
+  const lang = Object.hasOwn(LANGS, body.lang) ? body.lang : "en";   // default English
   const mode = ["moon", "mars", "explore"].includes(body.mode) ? body.mode : "explore";
   const question = String(body.question || "").slice(0, 300).trim();
   const history = (Array.isArray(body.history) ? body.history : []).slice(-6)
     .map(h => `${h.role === "kid" ? "Child" : "Spirit"}: ${String(h.text || "").slice(0, 400)}`).join("\n");
-  if (!question) return reply({ answer: NO_INFO[lang], source_label: "None", has_data: false }, 400);
+  if (!question) return reply(NO_INFO, 400);
 
   if (!process.env.GEMINI_API_KEY) {
     return reply({ answer: "", source_label: "None", has_data: false,
@@ -411,8 +447,13 @@ async function handle(req) {
   }
 
   // 1) Kumpulkan fakta dari sumber NASA sesuai tombol yang dipilih
-  const lastKid = (Array.isArray(body.history) ? body.history : []).filter(h => h.role === "kid").slice(-1)[0]?.text || "";
-  const searchText = question + " " + (keywords(question).length <= 1 ? lastKid : "");   // jawaban pendek "ya" -> pakai pertanyaan sebelumnya
+  let lastKid = String((Array.isArray(body.history) ? body.history : []).filter(h => h.role === "kid").slice(-1)[0]?.text || "").slice(0, 300);
+  let searchQ = question, english = null;
+  if (NEEDS_ENGLISH_SEARCH.has(lang)) {             // misal "¿Qué dejaron en la Luna?" -> "What did they leave on the Moon?"
+    english = await toEnglish(question, lastKid, deadline).catch(() => null);
+    if (english) { searchQ = english.current; lastKid = english.previous || lastKid; }
+  }
+  const searchText = searchQ + " " + (keywords(searchQ).length <= 1 ? lastKid : "");   // jawaban pendek "ya" -> pakai pertanyaan sebelumnya
   const astro = searchAstronaut(searchText);            // pertanyaan tentang astronot (di semua tombol)
   let local = null;
   const astroCatalog = astro?.catalogQuery && mode !== "mars" ? searchCatalog(astro.catalogQuery) : null;   // misal kantong kotoran di Bulan
@@ -421,7 +462,8 @@ async function handle(req) {
   else {
     // Tombol Explore More: daftar Mars hanya dipakai kalau Mars atau wahananya disebut
     const marsNamed = /\b(mars|viking|pathfinder|sojourner|opportunity|phoenix|curiosity|insight|perseverance|ingenuity|beagle|schiaparelli|zhurong|tianwen)\b|spirit rover/.test(searchText.toLowerCase());
-    if (astro && !missionsIn(searchText).length) local = astroCatalog || (marsNamed ? searchMars(searchText, false) : null);
+    // Pertanyaan astronot yang juga menyebut benda di katalog ("siapa yang meninggalkan bola golf?") -> kirim keduanya
+    if (astro && !missionsIn(searchText).length) local = astroCatalog || searchCatalog(searchText) || (marsNamed ? searchMars(searchText, false) : null);
     else local = searchCatalog(searchText) || (marsNamed ? searchMars(searchText, false) : null);
   }
 
@@ -444,7 +486,7 @@ async function handle(req) {
   if (manifest) { parts.push(manifest); labels.push("NASA Open API"); }
 
   // Tanpa data NASA, blok konteks dikirim kosong: Gemini hanya boleh menjawab kalau topiknya luar angkasa, fisika, atau fenomena langit
-  const userTurn = `lang: ${lang}\nmode: ${mode}\nconversation:\n${history || "(none)"}\n<nasa_context>\n${parts.join("\n\n")}\n</nasa_context>\n\nChild's question: ${question}`;
+  const userTurn = `lang: ${lang} (${LANGS[lang]})\nmode: ${mode}\nconversation:\n${history || "(none)"}\n<nasa_context>\n${parts.join("\n\n")}\n</nasa_context>\n\nChild's question: ${question}`;
 
   // 2) Minta Gemini menceritakan fakta tadi
   let g;
@@ -469,7 +511,7 @@ async function handle(req) {
       devError: e?.name === "TimeoutError" || e?.name === "AbortError" ? "Gemini terlalu lama menjawab (batas total 9 detik)." : "Tidak bisa menghubungi Gemini: " + e?.message }, 504);
   }
 
-  if (g.status === 429) return reply({ answer: BUSY[lang], source_label: "None", has_data: false, devError: "Batas gratis Gemini tercapai (429). Tunggu sebentar." }, 429);
+  if (g.status === 429) return reply({ answer: "", notice: "busy", source_label: "None", has_data: false, devError: "Batas gratis Gemini tercapai (429). Tunggu sebentar." }, 429);
   if (!g.ok) {
     const detail = (await g.text()).slice(0, 300);
     return reply({ answer: "", source_label: "None", has_data: false, devError: `Gemini error ${g.status}: ${detail}` }, 502);
@@ -479,13 +521,13 @@ async function handle(req) {
   let out;
   const text = (data?.candidates?.[0]?.content?.parts || []).filter(p => p.text && !p.thought).map(p => p.text).join("");
   try { out = JSON.parse(text || "{}"); } catch { out = {}; }
-  if (!out.answer) return reply({ answer: NO_INFO[lang], source_label: "None", has_data: false,
+  if (!out.answer) return reply({ ...NO_INFO,
     devError: "Gemini menjawab, tapi isinya tidak bisa dibaca: " + (text || JSON.stringify(data).slice(0, 300)).slice(0, 300) });
 
   // 3) Kirim jawaban + label sumber + 1 foto NASA (foto hanya kalau Spirit benar-benar memakai data NASA)
   let basis = ["nasa", "general", "none"].includes(out.basis) ? out.basis : "none";
   if (basis === "nasa" && !parts.length) basis = "general";       // tidak ada data NASA = tidak boleh berlabel NASA
-  if (basis === "none") return reply({ answer: NO_INFO[lang], source_label: "None", has_data: false });
+  if (basis === "none") return reply(NO_INFO);
   const first = images[0];
   return reply({
     answer: out.answer,

@@ -63,6 +63,12 @@
   .pill { font: 700 14px 'Nunito', Arial, sans-serif; border: 2px solid var(--yellow); color: var(--yellow);
           background: transparent; border-radius: 999px; padding: 6px 14px; cursor: pointer; }
   .pill.on { background: var(--yellow); color: var(--navy); }
+  .lang-select { padding-inline-end: 8px; max-width: 190px; }
+  .lang-select option { color: var(--navy); background: var(--cream); }
+  .voice-note { color: var(--yellow); font-size: 13px; text-align: center; max-width: 260px; }
+  /* Bahasa Arab ditulis dari kanan ke kiri: ekor gelembung chat ikut dibalik */
+  [dir="rtl"] .msg.kid { border-radius: 20px 20px 20px 6px; }
+  [dir="rtl"] .msg.bot { border-radius: 20px 20px 6px 20px; }
   .mode-title { font: 700 20px 'Fredoka', Arial, sans-serif; color: var(--cream); }
 
   /* ====== MENU 3 TOMBOL ====== */
@@ -113,6 +119,7 @@
     <div class="wave" id="wave"><span></span><span></span><span></span><span></span><span></span></div>
     <h1>Explorer Spirit</h1>
     <div class="status" id="status"></div>
+    <div class="voice-note" id="voiceNote"></div>
   </div>
 
   <!-- ====== KANAN ====== -->
@@ -122,8 +129,7 @@
       <span class="mode-title" id="modeTitle"></span>
       <span class="spacer"></span>
       <button class="pill on" id="voiceBtn" aria-label="Sound on/off">🔊</button>
-      <button class="pill on" id="langEn">English</button>
-      <button class="pill" id="langId">Bahasa Indonesia</button>
+      <select class="pill lang-select" id="langSel" aria-label="Language"></select>
     </div>
 
     <!-- Menu 3 tombol -->
@@ -180,18 +186,47 @@
 
 <script>
 /* =========================================================
+   BAHASA (9 bahasa)
+   name   = nama di menu (ditulis dalam bahasa itu sendiri)
+   locale = kode untuk suara & mikrofon
+   AUTO_LANG = true  -> halaman otomatis memakai bahasa perangkat anak (kalau didukung)
+   AUTO_LANG = false -> selalu mulai dalam English
+   Paksa satu bahasa lewat alamat, misalnya  situsmu.netlify.app/?lang=en
+   ========================================================= */
+const LANGS = {
+  en: { name: "English",          locale: "en-US" },
+  id: { name: "Bahasa Indonesia", locale: "id-ID" },
+  es: { name: "Español",          locale: "es-ES" },
+  fr: { name: "Français",         locale: "fr-FR" },
+  pt: { name: "Português",        locale: "pt-BR" },
+  zh: { name: "中文",              locale: "zh-CN" },
+  ja: { name: "日本語",            locale: "ja-JP" },
+  ar: { name: "العربية",          locale: "ar-SA", rtl: true },
+  hi: { name: "हिन्दी",             locale: "hi-IN" },
+};
+const AUTO_LANG = true;
+
+/* =========================================================
    SUARA ROBOT (tidak ditampilkan di halaman, diatur di sini)
-   English          : gaya "Speedy robot" + suara bernama "Mark"
-   Bahasa Indonesia : gaya "Speedy robot" + suara bawaan perangkat
+   Semua bahasa : gaya "Speedy robot"
+   English      : suara bernama "Mark";  bahasa lain: suara bawaan perangkat ("")
    pitch 0.1–2 (tinggi nada), rate 0.5–2 (kecepatan)
+   Kalau perangkat tidak punya suara untuk bahasa itu, Spirit hanya menulis (tidak bicara).
    ========================================================= */
 const VOICE = {
   en: { pitch: 1.5, rate: 1.3, voiceName: "Mark" },
   id: { pitch: 1.5, rate: 1.3, voiceName: "" },      // "" = suara bawaan
+  es: { pitch: 1.5, rate: 1.3, voiceName: "" },
+  fr: { pitch: 1.5, rate: 1.3, voiceName: "" },
+  pt: { pitch: 1.5, rate: 1.3, voiceName: "" },
+  zh: { pitch: 1.5, rate: 1.2, voiceName: "" },
+  ja: { pitch: 1.5, rate: 1.2, voiceName: "" },
+  ar: { pitch: 1.5, rate: 1.2, voiceName: "" },
+  hi: { pitch: 1.5, rate: 1.2, voiceName: "" },
   volume: 1, beep: true,
 };
 
-let lang = "en";            // bahasa awal: "en". Pilihan lain: "id"
+let lang = "en";            // bahasa aktif (diatur oleh setLang di bawah)
 let mode = null;            // "moon" | "mars" | "explore"
 let history = [];           // percakapan di mode ini (dikirim ke otak supaya mengerti jawaban "yes"/"ya")
 let voiceOn = true;
@@ -200,7 +235,9 @@ const $ = (id) => document.getElementById(id);
 const spirit = $("spirit"), spiritImg = $("spiritImg"), wave = $("wave");
 spiritImg.addEventListener("animationend", () => spiritImg.classList.remove("word"));
 
-/* ---------- Teks 2 bahasa ---------- */
+/* ---------- Teks 9 bahasa ----------
+   "Explore More" sengaja tidak diterjemahkan (nama tombol).
+   Terjemahan selain English & Indonesia sebaiknya dicek penutur asli sebelum dipakai di sekolah. */
 const UI = {
   en: { home: "Where do you want to explore?", hello: "Hi! Pick a place to explore.",
         moon: "Moon", mars: "Mars", explore: "Explore More",
@@ -209,9 +246,12 @@ const UI = {
         firstMars: "Hi, I'm Explorer Spirit! Do you want to know what objects were left behind on Mars?",
         firstExplore: "Hi, I'm Explorer Spirit! What would you like to know about space?",
         back: "← Menu", think: "Spirit is remembering…", ready: "Ask me another!", listen: "I'm listening…",
-        placeholder: "Type your question…", send: "Send",
+        placeholder: "Type your question…", send: "Send", speak: "Speak",
         error: "My signal from space is weak right now. Please try again in a moment!", photo: "Photo: NASA Image Library",
-        source: "Source: ", general: "Source: AI General Knowledge (general space science, not NASA data)" },
+        source: "Source: ", general: "Source: AI General Knowledge (general space science, not NASA data)",
+        noInfo: "I don't have that information yet. Try asking me about another object on the Moon or Mars!",
+        busy: "Lots of explorers are asking right now. Wait a minute and try again!",
+        noVoice: "This device has no English voice, so I'll answer in writing." },
   id: { home: "Mau menjelajah ke mana?", hello: "Halo! Pilih tempat yang mau dijelajahi.",
         moon: "Bulan", mars: "Mars", explore: "Explore More",
         subMoon: "Benda yang ditinggalkan di Bulan", subMars: "Benda yang ditinggalkan di Mars", subExplore: "Tanya apa saja tentang luar angkasa",
@@ -219,11 +259,105 @@ const UI = {
         firstMars: "Hai, aku Explorer Spirit! Kamu mau tahu benda apa saja yang ditinggalkan di Mars?",
         firstExplore: "Hai, aku Explorer Spirit! Apa yang ingin kamu ketahui tentang luar angkasa?",
         back: "← Menu", think: "Spirit sedang mengingat-ingat…", ready: "Tanya aku lagi!", listen: "Aku mendengarkan…",
-        placeholder: "Ketik pertanyaanmu…", send: "Kirim",
+        placeholder: "Ketik pertanyaanmu…", send: "Kirim", speak: "Bicara",
         error: "Sinyal dari luar angkasa sedang lemah. Coba lagi sebentar, ya!", photo: "Foto: NASA Image Library",
-        source: "Sumber: ", general: "Sumber: AI General Knowledge (pengetahuan sains umum, bukan data NASA)" },
+        source: "Sumber: ", general: "Sumber: AI General Knowledge (pengetahuan sains umum, bukan data NASA)",
+        noInfo: "Aku belum punya informasi itu. Coba tanya aku tentang benda lain di Bulan atau Mars, ya!",
+        busy: "Banyak sekali penjelajah yang bertanya sekarang. Tunggu satu menit, lalu coba lagi, ya!",
+        noVoice: "Perangkat ini belum punya suara Bahasa Indonesia, jadi aku menjawab lewat tulisan, ya." },
+  es: { home: "¿Adónde quieres ir a explorar?", hello: "¡Hola! Elige un lugar para explorar.",
+        moon: "Luna", mars: "Marte", explore: "Explore More",
+        subMoon: "Objetos que se quedaron en la Luna", subMars: "Objetos que se quedaron en Marte", subExplore: "Pregunta lo que quieras sobre el espacio",
+        firstMoon: "¡Hola, soy Explorer Spirit! ¿Quieres saber qué objetos se dejaron en la Luna?",
+        firstMars: "¡Hola, soy Explorer Spirit! ¿Quieres saber qué objetos se dejaron en Marte?",
+        firstExplore: "¡Hola, soy Explorer Spirit! ¿Qué te gustaría saber sobre el espacio?",
+        back: "← Menú", think: "Spirit está recordando…", ready: "¡Pregúntame otra cosa!", listen: "Te escucho…",
+        placeholder: "Escribe tu pregunta…", send: "Enviar", speak: "Hablar",
+        error: "Mi señal desde el espacio está débil ahora. ¡Inténtalo de nuevo en un momento!", photo: "Foto: NASA Image Library",
+        source: "Fuente: ", general: "Fuente: AI General Knowledge (ciencia espacial general, no son datos de la NASA)",
+        noInfo: "Todavía no tengo esa información. ¡Pregúntame por otro objeto en la Luna o en Marte!",
+        busy: "Muchos exploradores están preguntando ahora. ¡Espera un minuto y vuelve a intentarlo!",
+        noVoice: "Este dispositivo no tiene voz en español, así que te responderé por escrito." },
+  fr: { home: "Où veux-tu aller explorer ?", hello: "Salut ! Choisis un endroit à explorer.",
+        moon: "Lune", mars: "Mars", explore: "Explore More",
+        subMoon: "Objets laissés sur la Lune", subMars: "Objets laissés sur Mars", subExplore: "Pose toutes tes questions sur l'espace",
+        firstMoon: "Salut, je suis Explorer Spirit ! Tu veux savoir quels objets ont été laissés sur la Lune ?",
+        firstMars: "Salut, je suis Explorer Spirit ! Tu veux savoir quels objets ont été laissés sur Mars ?",
+        firstExplore: "Salut, je suis Explorer Spirit ! Qu'est-ce que tu aimerais savoir sur l'espace ?",
+        back: "← Menu", think: "Spirit se souvient…", ready: "Pose-moi une autre question !", listen: "Je t'écoute…",
+        placeholder: "Écris ta question…", send: "Envoyer", speak: "Parler",
+        error: "Mon signal depuis l'espace est faible en ce moment. Réessaie dans un instant !", photo: "Photo : NASA Image Library",
+        source: "Source : ", general: "Source : AI General Knowledge (science spatiale générale, pas des données de la NASA)",
+        noInfo: "Je n'ai pas encore cette information. Pose-moi une question sur un autre objet sur la Lune ou sur Mars !",
+        busy: "Beaucoup d'explorateurs posent des questions en ce moment. Attends une minute et réessaie !",
+        noVoice: "Cet appareil n'a pas de voix en français, alors je te réponds par écrit." },
+  pt: { home: "Onde você quer explorar?", hello: "Oi! Escolha um lugar para explorar.",
+        moon: "Lua", mars: "Marte", explore: "Explore More",
+        subMoon: "Objetos deixados na Lua", subMars: "Objetos deixados em Marte", subExplore: "Pergunte o que quiser sobre o espaço",
+        firstMoon: "Oi, eu sou o Explorer Spirit! Você quer saber quais objetos foram deixados na Lua?",
+        firstMars: "Oi, eu sou o Explorer Spirit! Você quer saber quais objetos foram deixados em Marte?",
+        firstExplore: "Oi, eu sou o Explorer Spirit! O que você quer saber sobre o espaço?",
+        back: "← Menu", think: "O Spirit está se lembrando…", ready: "Me pergunte outra coisa!", listen: "Estou ouvindo…",
+        placeholder: "Digite sua pergunta…", send: "Enviar", speak: "Falar",
+        error: "Meu sinal do espaço está fraco agora. Tente de novo daqui a pouco!", photo: "Foto: NASA Image Library",
+        source: "Fonte: ", general: "Fonte: AI General Knowledge (ciência espacial geral, não são dados da NASA)",
+        noInfo: "Ainda não tenho essa informação. Tente me perguntar sobre outro objeto na Lua ou em Marte!",
+        busy: "Muitos exploradores estão perguntando agora. Espere um minuto e tente de novo!",
+        noVoice: "Este aparelho não tem voz em português, então vou responder por escrito." },
+  zh: { home: "你想去哪里探索？", hello: "你好！选一个地方去探索吧。",
+        moon: "月球", mars: "火星", explore: "Explore More",
+        subMoon: "留在月球上的物品", subMars: "留在火星上的物品", subExplore: "关于太空，什么都可以问",
+        firstMoon: "你好，我是 Explorer Spirit！你想知道人们在月球上留下了哪些东西吗？",
+        firstMars: "你好，我是 Explorer Spirit！你想知道人们在火星上留下了哪些东西吗？",
+        firstExplore: "你好，我是 Explorer Spirit！你想了解太空的什么呢？",
+        back: "← 菜单", think: "Spirit 正在回想……", ready: "再问我一个问题吧！", listen: "我在听……",
+        placeholder: "输入你的问题……", send: "发送", speak: "说话",
+        error: "我来自太空的信号现在有点弱。请稍后再试一次！", photo: "照片：NASA Image Library",
+        source: "来源：", general: "来源：AI General Knowledge（一般太空科学知识，不是 NASA 数据）",
+        noInfo: "我还没有这方面的信息。试着问我月球或火星上的其他物品吧！",
+        busy: "现在有很多探险家在提问。请等一分钟再试！",
+        noVoice: "这台设备没有中文语音，所以我会用文字回答你。" },
+  ja: { home: "どこを探検したい？", hello: "こんにちは！探検したい場所をえらんでね。",
+        moon: "月", mars: "火星", explore: "Explore More",
+        subMoon: "月にのこされたもの", subMars: "火星にのこされたもの", subExplore: "宇宙のことなら何でもきいてね",
+        firstMoon: "こんにちは、ぼくは Explorer Spirit！月にどんなものがのこされているか、知りたい？",
+        firstMars: "こんにちは、ぼくは Explorer Spirit！火星にどんなものがのこされているか、知りたい？",
+        firstExplore: "こんにちは、ぼくは Explorer Spirit！宇宙について何が知りたい？",
+        back: "← メニュー", think: "Spirit が思い出しているよ…", ready: "また質問してね！", listen: "きいているよ…",
+        placeholder: "しつもんを入力してね…", send: "送る", speak: "話す",
+        error: "宇宙からの電波がいま弱いみたい。少しまってから、もう一度ためしてね！", photo: "写真：NASA Image Library",
+        source: "出典：", general: "出典：AI General Knowledge（一般的な宇宙科学の知識で、NASAのデータではありません）",
+        noInfo: "その情報はまだもっていないんだ。月や火星にある、ほかのものについてきいてみてね！",
+        busy: "いま、たくさんの探検家が質問しているよ。1分まってから、もう一度ためしてね！",
+        noVoice: "このデバイスには日本語の音声がないので、文字でこたえるね。" },
+  ar: { home: "إلى أين تريد أن تستكشف؟", hello: "مرحبًا! اختر مكانًا لتستكشفه.",
+        moon: "القمر", mars: "المريخ", explore: "Explore More",
+        subMoon: "أشياء تُركت على القمر", subMars: "أشياء تُركت على المريخ", subExplore: "اسأل أي شيء عن الفضاء",
+        firstMoon: "مرحبًا، أنا Explorer Spirit! هل تريد أن تعرف ما الأشياء التي تُركت على القمر؟",
+        firstMars: "مرحبًا، أنا Explorer Spirit! هل تريد أن تعرف ما الأشياء التي تُركت على المريخ؟",
+        firstExplore: "مرحبًا، أنا Explorer Spirit! ماذا تحب أن تعرف عن الفضاء؟",
+        back: "→ القائمة", think: "Spirit يتذكّر…", ready: "اسألني سؤالًا آخر!", listen: "أنا أستمع…",
+        placeholder: "اكتب سؤالك…", send: "إرسال", speak: "تحدّث",
+        error: "إشارتي من الفضاء ضعيفة الآن. حاول مرة أخرى بعد قليل!", photo: "الصورة: NASA Image Library",
+        source: "المصدر: ", general: "المصدر: AI General Knowledge (علوم فضاء عامة، وليست بيانات من ناسا)",
+        noInfo: "ليست لديّ هذه المعلومة بعد. جرّب أن تسألني عن شيء آخر على القمر أو المريخ!",
+        busy: "هناك مستكشفون كثيرون يسألون الآن. انتظر دقيقة ثم حاول مرة أخرى!",
+        noVoice: "هذا الجهاز لا يحتوي على صوت باللغة العربية، لذلك سأجيبك كتابةً." },
+  hi: { home: "तुम कहाँ खोजबीन करना चाहते हो?", hello: "नमस्ते! खोजबीन के लिए एक जगह चुनो।",
+        moon: "चाँद", mars: "मंगल", explore: "Explore More",
+        subMoon: "चाँद पर छोड़ी गई चीज़ें", subMars: "मंगल पर छोड़ी गई चीज़ें", subExplore: "अंतरिक्ष के बारे में कुछ भी पूछो",
+        firstMoon: "नमस्ते, मैं Explorer Spirit हूँ! क्या तुम जानना चाहते हो कि चाँद पर कौन-कौन सी चीज़ें छोड़ी गई थीं?",
+        firstMars: "नमस्ते, मैं Explorer Spirit हूँ! क्या तुम जानना चाहते हो कि मंगल पर कौन-कौन सी चीज़ें छोड़ी गई थीं?",
+        firstExplore: "नमस्ते, मैं Explorer Spirit हूँ! तुम अंतरिक्ष के बारे में क्या जानना चाहते हो?",
+        back: "← मेनू", think: "Spirit याद कर रहा है…", ready: "मुझसे एक और सवाल पूछो!", listen: "मैं सुन रहा हूँ…",
+        placeholder: "अपना सवाल लिखो…", send: "भेजो", speak: "बोलो",
+        error: "अंतरिक्ष से मेरा सिग्नल अभी कमज़ोर है। थोड़ी देर बाद फिर से कोशिश करो!", photo: "फ़ोटो: NASA Image Library",
+        source: "स्रोत: ", general: "स्रोत: AI General Knowledge (अंतरिक्ष विज्ञान की सामान्य जानकारी, NASA का डेटा नहीं)",
+        noInfo: "मेरे पास अभी यह जानकारी नहीं है। चाँद या मंगल पर किसी और चीज़ के बारे में पूछो!",
+        busy: "अभी बहुत सारे खोजी सवाल पूछ रहे हैं। एक मिनट रुककर फिर से कोशिश करो!",
+        noVoice: "इस डिवाइस में हिंदी आवाज़ नहीं है, इसलिए मैं लिखकर जवाब दूँगा।" },
 };
-const t = (k) => UI[lang][k];
+const t = (k) => UI[lang][k] ?? UI.en[k];
 const FIRST = { moon: "firstMoon", mars: "firstMars", explore: "firstExplore" };
 
 /* ---------- Pesan di chat ---------- */
@@ -254,20 +388,27 @@ function addMessage(text, who, extra = {}) {
    SUARA ROBOT — text-to-speech bawaan browser (GRATIS)
    ========================================================= */
 let voices = [];
-function loadVoices() { voices = speechSynthesis.getVoices(); }
-if ("speechSynthesis" in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+function loadVoices() { voices = speechSynthesis.getVoices(); updateVoiceNote(); }
 
+function vLang(v) { return (v.lang || "").toLowerCase().replace(/_/g, "-"); }   // Android menulis "en_US"
 function pickVoice() {
-  const code = lang === "id" ? "id" : "en";
-  const want = VOICE[lang].voiceName;
-  const sameLang = voices.filter(v => v.lang.toLowerCase().startsWith(code));
+  const code = lang, locale = LANGS[lang].locale.toLowerCase();
+  const prefixes = code === "zh" ? ["zh", "cmn"] : [code];
+  const sameLang = voices.filter(v => prefixes.some(p => vLang(v) === p || vLang(v).startsWith(p + "-")));
+  const want = VOICE[lang]?.voiceName;
   if (want) {
     const named = sameLang.find(v => new RegExp("\\b" + want + "\\b", "i").test(v.name));
     if (named) return named;                     // contoh: "Microsoft Mark - English (United States)"
   }
-  // suara bawaan: utamakan suara Google (jernih), lalu suara default perangkat, lalu yang pertama
-  return sameLang.find(v => /google/i.test(v.name)) || sameLang.find(v => v.default) || sameLang[0] || null;
+  // suara bawaan: utamakan logat yang sama (misal zh-CN, bukan zh-HK), suara Google (jernih), lalu default perangkat
+  const exact = sameLang.filter(v => vLang(v) === locale);
+  const pool = exact.length ? exact : sameLang;
+  return pool.find(v => /google/i.test(v.name)) || pool.find(v => v.default) || pool[0] || null;
 }
+// Perangkat tidak punya suara untuk bahasa ini? Tampilkan catatan kecil, Spirit menjawab lewat tulisan saja.
+function hasVoice() { return !voices.length || !!pickVoice(); }   // daftar suara kosong = biarkan browser memilih
+function updateVoiceNote() { const n = $("voiceNote"); if (n) n.textContent = ("speechSynthesis" in window && !hasVoice()) ? t("noVoice") : ""; }
+if ("speechSynthesis" in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
 
 let audioCtx;
 function beepBoop() {   // bunyi "bip-bup" sebelum bicara
@@ -295,13 +436,15 @@ function wordPop() { spiritImg.classList.remove("word"); void spiritImg.offsetWi
 async function speak(text) {
   if (!voiceOn || !("speechSynthesis" in window) || !text) return;
   speechSynthesis.cancel();
+  if (!hasVoice()) return;                                   // tidak ada suara bahasa ini: jangan dibaca dengan logat lain
   if (VOICE.beep) await beepBoop();
-  const parts = text.match(/[^.!?…]+[.!?…]*/g) || [text];   // per kalimat, supaya Chrome tidak berhenti di tengah
-  const voice = pickVoice(), set = VOICE[lang];
+  // per kalimat (juga tanda baca Tionghoa/Jepang 。！？, Arab ؟, Hindi ।), supaya Chrome tidak berhenti di tengah
+  const parts = text.match(/[^.!?…。！？؟।]+[.!?…。！？؟।]*/g) || [text];
+  const voice = pickVoice(), set = VOICE[lang] || VOICE.en;
   startTalking();
   parts.forEach((p, i) => {
     const u = new SpeechSynthesisUtterance(p.trim());
-    u.lang = lang === "id" ? "id-ID" : "en-US";
+    u.lang = LANGS[lang].locale;
     if (voice) u.voice = voice;
     u.pitch = set.pitch; u.rate = set.rate; u.volume = VOICE.volume;
     u.onboundary = (e) => { if (e.name === "word") wordPop(); };
@@ -319,13 +462,16 @@ if (SR) {
   rec = new SR(); rec.interimResults = false; rec.maxAlternatives = 1;
   rec.onresult = (e) => { $("input").value = e.results[0][0].transcript; $("form").requestSubmit(); };
   rec.onend = () => { $("micBtn").classList.remove("listening"); $("status").textContent = t("ready"); };
+  rec.onerror = (e) => { console.warn("Mikrofon:", e.error); };   // misal bahasa ini tidak didukung pengenal suara
 } else {
   $("micBtn").style.display = "none";
 }
 $("micBtn").onclick = () => {
   if (!rec) return;
   speechSynthesis.cancel(); stopTalking();
-  rec.lang = lang === "id" ? "id-ID" : "en-US";
+  // pakai logat perangkat kalau bahasanya sama (misal es-MX), kalau tidak pakai logat standar
+  const dev = (navigator.language || "").replace(/_/g, "-");
+  rec.lang = dev.toLowerCase().split("-")[0] === lang && dev.includes("-") ? dev : LANGS[lang].locale;
   $("micBtn").classList.add("listening"); $("status").textContent = t("listen");
   rec.start();
 };
@@ -381,7 +527,7 @@ $("form").onsubmit = async (e) => {
       console.warn("Pesan untuk developer:", data.devError);   // lihat di Console (F12)
       if (DEBUG) addMessage("⚙️ Untuk developer: " + data.devError, "bot");
     }
-    const answer = data.answer || t("error");
+    const answer = data.notice ? t(data.notice) : (data.answer || t("error"));   // notice = pesan tetap dalam bahasa pilihan
     addMessage(answer, "bot", { image: data.image, label: data.source_label });
     history.push({ role: "spirit", text: answer });
     speak(answer);
@@ -395,24 +541,48 @@ $("form").onsubmit = async (e) => {
 };
 
 /* ---------- Bahasa ---------- */
-function setLang(l) {
+// Menu bahasa diisi dari daftar LANGS
+for (const [code, L] of Object.entries(LANGS)) {
+  const o = document.createElement("option"); o.value = code; o.textContent = L.name; o.lang = code;
+  $("langSel").appendChild(o);
+}
+function setLang(l, remember) {
+  if (!LANGS[l]) l = "en";
+  const changed = l !== lang;
   lang = l;
-  $("langEn").classList.toggle("on", l === "en"); $("langId").classList.toggle("on", l === "id");
+  $("langSel").value = l;
+  if (remember) { try { localStorage.setItem("spiritLang", l); } catch (e) {} }
   $("homeTitle").textContent = t("home");
   $("lblMoon").textContent = t("moon"); $("lblMars").textContent = t("mars"); $("lblExplore").textContent = t("explore");
   $("sub-moon").textContent = t("subMoon"); $("sub-mars").textContent = t("subMars"); $("sub-explore").textContent = t("subExplore");
   $("backBtn").textContent = t("back"); $("input").placeholder = t("placeholder"); $("sendBtn").textContent = t("send");
-  $("micBtn").title = l === "id" ? "Bicara" : "Speak";
+  $("micBtn").title = t("speak"); $("micBtn").setAttribute("aria-label", t("speak"));
   if (mode) $("modeTitle").textContent = t(mode); else $("status").textContent = t("hello");
   document.documentElement.lang = l;
+  document.documentElement.dir = LANGS[l].rtl ? "rtl" : "ltr";
+  updateVoiceNote();
+  if (mode && changed) openMode(mode);   // sedang di chat? mulai ulang dengan sapaan dalam bahasa baru
+}
+// Bahasa awal: ?lang=xx di alamat > pilihan terakhir anak > bahasa perangkat (kalau AUTO_LANG) > English
+function startLang() {
+  const fromUrl = new URLSearchParams(location.search).get("lang");
+  if (LANGS[fromUrl]) return fromUrl;
+  try { const saved = localStorage.getItem("spiritLang"); if (LANGS[saved]) return saved; } catch (e) {}
+  if (AUTO_LANG) {
+    for (const d of navigator.languages || [navigator.language || ""]) {
+      let c = String(d).toLowerCase().split(/[-_]/)[0];
+      if (c === "in") c = "id";                 // kode lama Bahasa Indonesia di beberapa perangkat
+      if (LANGS[c]) return c;
+    }
+  }
+  return "en";
 }
 $("voiceBtn").onclick = () => {
   voiceOn = !voiceOn;
   if (!voiceOn) { speechSynthesis.cancel(); stopTalking(); }
   $("voiceBtn").classList.toggle("on", voiceOn); $("voiceBtn").textContent = voiceOn ? "🔊" : "🔇";
 };
-$("langEn").onclick = () => setLang("en");
-$("langId").onclick = () => setLang("id");
+$("langSel").onchange = (e) => setLang(e.target.value, true);
 
 /* =========================================================
    LANGIT BERBINTANG (bintang berkelip + bintang jatuh)
@@ -452,7 +622,8 @@ function drawSky() {
 }
 addEventListener("resize", resizeSky); resizeSky(); drawSky();
 
-setLang("en");
+lang = null;   // supaya setLang pertama selalu menulis semua teks
+setLang(startLang());
 </script>
 </body>
 </html>
