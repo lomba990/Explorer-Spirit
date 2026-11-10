@@ -12,6 +12,9 @@
 
 import CATALOG from "../../data/catalog-moon.mjs";
 import MARS from "../../data/mars-hardware.mjs";
+import ASTRO from "../../data/astronaut-facts.mjs";
+import SPACE from "../../data/space-facts.mjs";
+const TOPICS = [...ASTRO.topics.map(t => ({ ...t, src: ASTRO.source })), ...SPACE.topics.map(t => ({ ...t, src: SPACE.source }))];
 
 // Model Gemini, dicoba berurutan. Flash-Lite dipakai karena paling cepat (Flash biasa bisa lebih dari 6 detik).
 // Mau pakai model lain? Isi environment variable GEMINI_MODEL di Netlify, misalnya gemini-flash-latest.
@@ -61,7 +64,9 @@ You remember every mission and you have waited quietly to tell its story. You ta
 - If <nasa_context> is empty or does not answer the question, there are two cases:
   (a) The question is about space science, space exploration, physics, or sky phenomena:
       - space: stars, the Sun, planets, moons, comets, asteroids, galaxies, black holes, the universe;
-      - exploration: astronauts, rockets, satellites, space stations, telescopes, NASA in general;
+      - exploration: astronauts, rockets, spacecraft, satellites, space stations, telescopes, NASA and other space agencies,
+        space history and famous "firsts", how to become an astronaut, life in space (food, sleep, health, fun);
+      - big questions: is there life on other planets (say honestly that none has been found yet), the future of space travel;
       - physics a child meets at school: light (e.g. the speed of light, how long sunlight takes to reach Earth),
         gravity, forces and motion, energy, heat, sound (and why space is silent), magnets, the atmosphere;
       - sky phenomena: day and night, seasons, Moon phases, eclipses, tides, meteors and meteor showers,
@@ -76,6 +81,8 @@ You remember every mission and you have waited quietly to tell its story. You ta
       Children like to link what they learn at school with new things. When it helps, connect the idea to a school
       lesson or an everyday comparison the child knows (a car, a bicycle, a football field, a classroom experiment),
       and make sure the comparison is true. For a school physics question, finish by linking it back to space.
+      Imaginative "what if" questions (for example "can a cat go to space?" or "can I sleep on the Moon?") are welcome:
+      answer playfully, but every fact you use must be true science.
       Never present this as NASA data or as something you, the Spirit, remember from a mission.
   (b) Anything else (sports, celebrities, politics, homework that is not about space, personal questions),
       or a space question you cannot answer confidently. Reply only:
@@ -89,6 +96,12 @@ You remember every mission and you have waited quietly to tell its story. You ta
 - "conversation" shows the last messages. Use it to understand short replies such as "yes", "ya", "tell me more" or "the second one".
 - If the child says yes to "do you want to know what was left behind?", give a short, exciting overview from <nasa_context>
   (a few surprising objects, not a long list) and ask which one they want to hear about.
+
+## 1c. Sad or sensitive topics (for example astronauts who died)
+- Answer honestly and briefly, in a calm and gentle voice. Never give frightening or graphic details.
+- Say who they were and what they were doing, that they are remembered as brave explorers, how people honour them,
+  and that what was learned made spaceflight safer. If the context has a memorial on the Moon or Mars, mention it.
+- Do not end with a cheerful joke. A gentle invitation (for example about the memorials) is fine.
 
 ## 2. How you tell it (you are a storyteller, not a search engine)
 - Speak as the Spirit, warm and curious. With NASA data, speak in first person ("I was there when…") and keep the facts exactly as given.
@@ -131,7 +144,7 @@ would will tell me about of on in at to for from with and or that this those the
 please story spirit hi hello hey kind thing things left behind leave still moon's
 apa siapa dimana di mana kapan kenapa mengapa bagaimana itu ini yang dan atau dari ke pada untuk dengan tentang
 ceritakan cerita tolong dong ya aku saya kamu kami kita ada adalah sih kah apakah benda bisa boleh mau tahu
-ditinggalkan ditinggal tinggal masih yes yeah yep sure ok okay tentu iya oke more lagi happened happen terjadi sekarang now`.split(/\s+/));
+ditinggalkan ditinggal tinggal masih yes yeah yep sure ok okay tentu iya oke more lagi happened happen terjadi sekarang now many much banyak total jumlah estimasi kira-kira about`.split(/\s+/));
 
 // Kata bahasa Indonesia / kata anak-anak -> istilah di katalog NASA
 const SYNONYMS = {
@@ -143,6 +156,11 @@ const SYNONYMS = {
   plakat: "plaque", kotoran: "defecation", poop: "defecation", sikat: "brush", handuk: "towels",
   sabun: "soap", makanan: "food", sarung: "gloves", gunting: "clippers", tas: "bag", kantong: "bag",
   antena: "antenna", baterai: "battery", gempa: "seismic", seismometer: "seismic",
+  // kata anak-anak untuk kotoran, pipis dan muntah -> nama resmi di katalog NASA
+  poo: "defecation", pup: "defecation", eek: "defecation", tai: "defecation", tahi: "defecation", tinja: "defecation",
+  feses: "defecation", berak: "defecation", feces: "defecation", faeces: "defecation",
+  pee: "urine", wee: "urine", pipis: "urine", kencing: "urine", urin: "urine",
+  vomit: "emesis", puke: "emesis", muntah: "emesis", sampah: "disposal", trash: "disposal", garbage: "disposal", rubbish: "disposal",
 };
 // Kata yang terlalu umum di katalog (hampir semua baris mengandung "lunar")
 const CATALOG_NOISE = new Set(["moon", "bulan", "lunar", "apollo", "mars", "nasa", "mission", "misi", "astronaut", "astronauts",
@@ -153,7 +171,8 @@ const stem = (w) => w.length <= 3 ? w : /(ses|xes|zes|ches|shes)$/.test(w) ? w.s
 const wordRe = (w) => new RegExp(`(^|[^a-z])${stem(w).replace(/[^a-z0-9-]/g, "")}(s|es)?([^a-z]|$)`);
 
 function keywords(q) {
-  return q.toLowerCase().replace(/[^\p{L}\p{N}\s'-]/gu, " ").split(/\s+/)
+  q = q.toLowerCase().replace(/buang air besar/g, "defecation").replace(/buang air kecil/g, "urine");
+  return q.replace(/[^\p{L}\p{N}\s'-]/gu, " ").split(/\s+/)
     .filter(w => w.length > 1 && !STOP.has(w))
     .map(w => SYNONYMS[w] || w);
 }
@@ -207,7 +226,30 @@ function catalogBlock(rows, imageQuery) {
   });
   const lines = rows.map(r =>
     `- ${r.mission} | ${r.object}` + (r.qty ? ` [${r.qty}]` : "") + (r.location ? ` | location: ${r.location}` : ""));
-  return { text: `[CATALOGUE] ${CATALOG.source}\n` + (header.length ? header.join("\n") + "\n" : "") + lines.join("\n"), imageQuery };
+  return { text: `[CATALOGUE] ${CATALOG.source}\n` + (header.length ? header.join("\n") + "\n" : "") + lines.join("\n") + glossary(rows), imageQuery };
+}
+
+// Arti nama-nama resmi di katalog yang membingungkan, plus jumlahnya, supaya Gemini bisa menjelaskan ke anak
+const GLOSSARY = [
+  { re: /defecation/i, text: "Defecation Collection Device = a bag that collected an astronaut's poop" },
+  { re: /urine/i, text: "Urine collection assembly = equipment that collected an astronaut's pee" },
+  { re: /emesis/i, text: "Bag, Emesis = a sick bag for vomit" },
+  { re: /^s-ivb$/i, text: "S-IVB = the third stage of the Saturn V rocket, crashed into the Moon on purpose for experiments" },
+  { re: /\bplss\b/i, text: "PLSS = Portable Life Support System, the backpack that gave an astronaut air on the Moon" },
+  { re: /lrv|roving vehicle/i, text: "Lunar Roving Vehicle (LRV) = the Moon buggy the astronauts drove" },
+];
+function glossary(rows) {
+  const out = [];
+  for (const g of GLOSSARY) {
+    if (!rows.some(r => g.re.test(r.object))) continue;
+    const all = CATALOG.items.filter(i => g.re.test(i.object));
+    const perMission = {};
+    all.forEach(i => { perMission[i.mission] = (perMission[i.mission] || 0) + (i.qty || 1); });
+    const total = Object.values(perMission).reduce((a, b) => a + b, 0);
+    out.push(`${g.text}. In the whole catalogue these add up to ${total} (` +
+      Object.entries(perMission).map(([m, n]) => `${m}: ${n}`).join(", ") + ").");
+  }
+  return out.length ? "\nWhat the official names mean:\n" + out.map(x => "- " + x).join("\n") : "";
 }
 
 // Ringkasan katalog Bulan: dipakai kalau anak menjawab "ya" atau bertanya umum "apa saja yang ditinggalkan?"
@@ -255,6 +297,24 @@ function searchMars(question, overviewIfNone) {
   if (!overviewIfNone) return null;
   return { text: `[CATALOGUE] ${MARS.source}\n${MARS.summary}\nAll objects (short list):\n` + MARS.items.map(it => marsLine(it, false)).join("\n"),
            imageQuery: "Mars rover landing" };
+}
+
+// ---------- Sumber 1c: Fakta astronot ----------
+function searchAstronaut(text) {
+  const q = " " + text.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, " ").replace(/\s+/g, " ") + " ";
+  const hits = TOPICS
+    .filter(tp => !tp.requireAny || tp.requireAny.some(k => q.includes(" " + k + " ")))   // misal "berapa lama" harus bersama "bulan"
+    .filter(tp => !tp.excludeAny || !tp.excludeAny.some(k => q.includes(" " + k + " ")))  // misal "satelit mati" bukan soal astronot gugur
+    .map(tp => ({ tp, score: tp.keywords.filter(k => q.includes(" " + k + " ")).length }))
+    .filter(x => x.score > 0).sort((a, b) => b.score - a.score).slice(0, 2).map(x => x.tp);
+  if (!hits.length) return null;
+  return {
+    text: `[CATALOGUE] ${[...new Set(hits.map(tp => tp.src))].join("; ")}\n` +
+      hits.map(tp => `Topic: ${tp.id}${tp.sensitive ? " (sensitive: answer gently)" : ""}\n` +
+      tp.facts.map(f => "- " + f).join("\n")).join("\n\n"),
+    imageQuery: hits[0].image,
+    catalogQuery: hits.find(tp => tp.catalogQuery)?.catalogQuery || "",
+  };
 }
 
 // ---------- Sumber 2: NASA Image Library ----------
@@ -311,7 +371,7 @@ async function diagnose() {
   const t0 = Date.now();
   report["1_GEMINI_API_KEY"] = process.env.GEMINI_API_KEY ? "OK: sudah diisi" : "GAGAL: belum diisi di Netlify Environment variables (lalu deploy ulang)";
   report["2_NASA_API_KEY"] = process.env.NASA_API_KEY ? "OK: sudah diisi" : "Belum diisi (tidak wajib, data rover Mars memakai DEMO_KEY)";
-  report["3_data"] = `OK: katalog Bulan ${CATALOG.items.length} baris, daftar Mars ${MARS.items.length} benda`;
+  report["3_data"] = `OK: katalog Bulan ${CATALOG.items.length} baris, daftar Mars ${MARS.items.length} benda, fakta astronot ${ASTRO.topics.length} topik, fakta luar angkasa ${SPACE.topics.length} topik`;
   try {
     const t = Date.now(); const imgs = await searchImages("Apollo 14 golf");
     report["4_NASA_Image_Library"] = imgs.length ? `OK: ${imgs.length} hasil dalam ${Date.now() - t} ms` : "GAGAL: tidak ada hasil";
@@ -353,20 +413,29 @@ async function handle(req) {
   // 1) Kumpulkan fakta dari sumber NASA sesuai tombol yang dipilih
   const lastKid = (Array.isArray(body.history) ? body.history : []).filter(h => h.role === "kid").slice(-1)[0]?.text || "";
   const searchText = question + " " + (keywords(question).length <= 1 ? lastKid : "");   // jawaban pendek "ya" -> pakai pertanyaan sebelumnya
+  const astro = searchAstronaut(searchText);            // pertanyaan tentang astronot (di semua tombol)
   let local = null;
-  if (mode === "moon") local = searchCatalog(searchText) || moonOverview();
-  else if (mode === "mars") local = searchMars(searchText, true) || null;
-  else local = searchCatalog(searchText) || searchMars(searchText, false);
+  const astroCatalog = astro?.catalogQuery && mode !== "mars" ? searchCatalog(astro.catalogQuery) : null;   // misal kantong kotoran di Bulan
+  if (mode === "moon") local = searchCatalog(searchText) || astroCatalog || (astro ? null : moonOverview());
+  else if (mode === "mars") local = searchMars(searchText, !astro);
+  else {
+    // Tombol Explore More: daftar Mars hanya dipakai kalau Mars atau wahananya disebut
+    const marsNamed = /\b(mars|viking|pathfinder|sojourner|opportunity|phoenix|curiosity|insight|perseverance|ingenuity|beagle|schiaparelli|zhurong|tianwen)\b|spirit rover/.test(searchText.toLowerCase());
+    if (astro && !missionsIn(searchText).length) local = astroCatalog || (marsNamed ? searchMars(searchText, false) : null);
+    else local = searchCatalog(searchText) || (marsNamed ? searchMars(searchText, false) : null);
+  }
 
   const words = keywords(searchText);
   const rover = roverIn(searchText);
   const [images, manifest] = await Promise.all([
-    searchImages(local ? local.imageQuery : words.slice(0, 5).join(" ")).catch(() => []),
+    searchImages(astro ? astro.imageQuery : local ? local.imageQuery : words.slice(0, 5).join(" ")).catch(() => []),
     rover ? roverManifest(rover).catch(() => null) : Promise.resolve(null),
   ]);
 
   const parts = [], labels = [];
-  if (local) { parts.push(local.text); labels.push("Aggregate Data"); }
+  if (astro) parts.push(astro.text);
+  if (local) parts.push(local.text);
+  if (astro || local) labels.push("Aggregate Data");
   if (images.length) {
     parts.push("[IMAGE LIBRARY]\n" + images.map((it, i) =>
       `(${i + 1}) Title: ${it.title}\nDate: ${it.date}\nNASA center: ${it.center}\nDescription: ${it.description}`).join("\n\n"));
