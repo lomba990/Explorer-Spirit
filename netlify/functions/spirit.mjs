@@ -261,7 +261,38 @@ export default async (req) => {
   }
 };
 
+// ---------- Halaman cek: buka /.netlify/functions/spirit di browser ----------
+async function diagnose() {
+  const report = { explorer_spirit_check: "Halaman cek Explorer Spirit", checked_at: new Date().toISOString() };
+  const t0 = Date.now();
+  report["1_GEMINI_API_KEY"] = process.env.GEMINI_API_KEY ? "OK: sudah diisi" : "GAGAL: belum diisi di Netlify Environment variables (lalu deploy ulang)";
+  report["2_NASA_API_KEY"] = process.env.NASA_API_KEY ? "OK: sudah diisi" : "Belum diisi (tidak wajib, data rover Mars memakai DEMO_KEY)";
+  report["3_data"] = `OK: katalog Bulan ${CATALOG.items.length} baris, daftar Mars ${MARS.items.length} perangkat`;
+  try {
+    const t = Date.now(); const imgs = await searchImages("Apollo 14 golf");
+    report["4_NASA_Image_Library"] = imgs.length ? `OK: ${imgs.length} hasil dalam ${Date.now() - t} ms` : "GAGAL: tidak ada hasil";
+  } catch (e) { report["4_NASA_Image_Library"] = "GAGAL: " + (e?.name === "TimeoutError" ? "lebih dari 3 detik" : e?.message); }
+  if (process.env.GEMINI_API_KEY) {
+    const t = Date.now();
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
+        method: "POST", signal: withTimeout(GEMINI_TIMEOUT_MS),
+        headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
+        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: "Reply with the single word: ready" }] }],
+          generationConfig: { maxOutputTokens: 200, thinkingConfig: { thinkingLevel: "low" } } }),
+      });
+      const txt = await r.text();
+      report["5_Gemini"] = r.ok ? `OK: model ${MODEL} menjawab dalam ${Date.now() - t} ms` : `GAGAL: HTTP ${r.status} — ${txt.slice(0, 400)}`;
+    } catch (e) {
+      report["5_Gemini"] = "GAGAL: " + (e?.name === "TimeoutError" ? `lebih dari ${GEMINI_TIMEOUT_MS / 1000} detik` : e?.message);
+    }
+  } else report["5_Gemini"] = "Dilewati karena GEMINI_API_KEY belum diisi";
+  report["total_ms"] = Date.now() - t0;
+  return new Response(JSON.stringify(report, null, 2), { status: 200, headers: { "Content-Type": "application/json; charset=utf-8" } });
+}
+
 async function handle(req) {
+  if (req.method === "GET") return diagnose();
   if (req.method !== "POST") return reply({ answer: "", source_label: "None", has_data: false }, 405);
 
   let body = {};
@@ -346,8 +377,10 @@ async function handle(req) {
 
   const data = await g.json();
   let out;
-  try { out = JSON.parse(data?.candidates?.[0]?.content?.parts?.[0]?.text || "{}"); } catch { out = {}; }
-  if (!out.answer) return reply({ answer: NO_INFO[lang], source_label: "None", has_data: false });
+  const text = (data?.candidates?.[0]?.content?.parts || []).filter(p => p.text && !p.thought).map(p => p.text).join("");
+  try { out = JSON.parse(text || "{}"); } catch { out = {}; }
+  if (!out.answer) return reply({ answer: NO_INFO[lang], source_label: "None", has_data: false,
+    devError: "Gemini menjawab, tapi isinya tidak bisa dibaca: " + (text || JSON.stringify(data).slice(0, 300)).slice(0, 300) });
 
   // 3) Kirim jawaban + label sumber + 1 foto NASA (foto hanya kalau Spirit benar-benar memakai data NASA)
   let basis = ["nasa", "general", "none"].includes(out.basis) ? out.basis : "none";

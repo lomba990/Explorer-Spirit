@@ -2,3 +2,7 @@
 [build]
   publish = "."
   functions = "netlify/functions"
+
+[functions]
+  # esbuild menggabungkan spirit.mjs dengan folder data/ menjadi satu file saat deploy
+  node_bundler = "esbuild"
