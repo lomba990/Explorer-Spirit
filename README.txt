@@ -19,4 +19,7 @@ Penting: JANGAN menulis API key di file mana pun. Simpan hanya di Netlify:
   - Halaman otomatis memakai bahasa perangkat. Untuk demo, paksa satu bahasa: situsmu.netlify.app/?lang=en
   - Mau selalu mulai English? Di index.html ubah  const AUTO_LANG = true;  menjadi  false
   - Perangkat tanpa suara untuk bahasa itu: Spirit menjawab lewat tulisan saja.
+Ekspresi Spirit: mulut bergerak saat bicara, "?" saat berpikir, lampu saat dapat jawaban,
+  berputar kalau dibiarkan 20 detik (atau diklik). Atur di index.html: const BORED_AFTER = 20;
+  Catatan: spirit.png sengaja TANPA mulut, karena mulutnya digambar oleh index.html supaya bisa bergerak.
 Ada masalah? Buka situsmu dengan tambahan ?debug di belakang alamatnya untuk melihat pesan error.
