@@ -22,4 +22,7 @@ Penting: JANGAN menulis API key di file mana pun. Simpan hanya di Netlify:
 Ekspresi Spirit: mulut bergerak saat bicara, "?" saat berpikir, lampu saat dapat jawaban,
   berputar kalau dibiarkan 20 detik (atau diklik). Atur di index.html: const BORED_AFTER = 20;
   Catatan: spirit.png sengaja TANPA mulut, karena mulutnya digambar oleh index.html supaya bisa bergerak.
+Mikrofon hanya jalan di Chrome (Android/komputer), Safari (iPhone/Mac) dan Edge (komputer).
+  Di browser lain (Mi Browser, Opera, browser di dalam WhatsApp/Instagram, Chrome di iPhone),
+  tombol 🎤 menampilkan tombol "Buka di Chrome/Safari" dan "Salin link".
 Ada masalah? Buka situsmu dengan tambahan ?debug di belakang alamatnya untuk melihat pesan error.

@@ -146,6 +146,17 @@
                      background: var(--yellow); color: var(--navy); }
   .composer button.mic.listening { background: var(--orange); animation: blink .6s infinite alternate; }
   .composer button:disabled { opacity: .5; cursor: wait; }
+  /* Kotak saran mikrofon (muncul kalau mikrofon tidak bisa dipakai) */
+  .mic-tip { display: none; position: relative; background: var(--cream); color: var(--navy); border-radius: 18px;
+             padding: 12px 40px 12px 14px; font-size: 15px; line-height: 1.4; box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+  .mic-tip.show { display: block; }
+  .mic-tip .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .mic-tip .row:empty { display: none; }
+  .mic-tip .row button { font: 700 15px 'Fredoka', Arial, sans-serif; border: none; border-radius: 999px; padding: 8px 14px; cursor: pointer; }
+  .mic-tip .go { background: var(--orange); color: #fff; }
+  .mic-tip .copy { background: var(--navy); color: var(--yellow); }
+  .mic-tip .x { position: absolute; top: 6px; inset-inline-end: 8px; background: none; border: none; font-size: 22px;
+                line-height: 1; color: var(--navy); cursor: pointer; padding: 4px; }
 </style>
 </head>
 <body>
@@ -234,6 +245,11 @@
     <!-- Chat -->
     <div class="chat" id="chat">
       <div class="messages" id="messages"></div>
+      <div class="mic-tip" id="micTip" role="status">
+        <button type="button" class="x" id="micTipX" aria-label="Close">×</button>
+        <div id="micTipText"></div>
+        <div class="row" id="micTipRow"></div>
+      </div>
       <form class="composer" id="form">
         <button type="button" class="mic" id="micBtn">🎤</button>
         <input id="input" autocomplete="off" maxlength="300">
@@ -544,33 +560,170 @@ async function speak(text) {
 }
 
 /* =========================================================
-   MIKROFON (Chrome/Edge, GRATIS)
+   MIKROFON (GRATIS, pakai pengenal suara bawaan browser)
+   Hanya jalan di Chrome (Android/komputer), Safari (iPhone/Mac) dan Edge (komputer).
+   Di browser lain (Mi Browser, Opera, Firefox, browser di dalam WhatsApp/Instagram, Chrome di iPhone)
+   tombol 🎤 menampilkan saran untuk membuka halaman di Chrome atau Safari, bukan diam saja.
+   {b} = nama browser yang disarankan.
    ========================================================= */
-const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-let rec = null;
-if (SR) {
-  rec = new SR(); rec.interimResults = false; rec.maxAlternatives = 1;
-  rec.onresult = (e) => { $("input").value = e.results[0][0].transcript; $("form").requestSubmit(); };
-  rec.onend = () => { $("micBtn").classList.remove("listening"); $("status").textContent = t("ready"); };
-  rec.onerror = (e) => { console.warn("Mikrofon:", e.error); };   // misal bahasa ini tidak didukung pengenal suara
-} else {
-  $("micBtn").style.display = "none";
+const MIC_TEXT = {
+  en: { micSwitch: "The microphone doesn't work in this browser. Open this page in {b} so I can hear you. You can still type your question here.",
+        micOpen: "Open in {b}", micCopy: "Copy link", micCopied: "Link copied! Paste it in {b}.",
+        micBlocked: "The microphone isn't allowed yet. Allow it for this site in your browser settings, then tap 🎤 again.",
+        micNetwork: "I need the internet to hear you. Check your connection and tap 🎤 again.",
+        micNoSpeech: "I didn't hear anything. Tap 🎤 and start talking right away!",
+        micNoDevice: "I can't find a microphone on this device. Please type your question.",
+        micLangNo: "The microphone can't understand this language yet. Please type your question." },
+  id: { micSwitch: "Mikrofon belum bisa dipakai di browser ini. Buka halaman ini di {b} supaya aku bisa mendengarmu. Kamu tetap bisa mengetik pertanyaan di sini.",
+        micOpen: "Buka di {b}", micCopy: "Salin link", micCopied: "Link tersalin! Tempel di {b}, ya.",
+        micBlocked: "Mikrofon belum diizinkan. Izinkan mikrofon untuk situs ini di pengaturan browser, lalu tekan 🎤 lagi.",
+        micNetwork: "Aku butuh internet untuk mendengarmu. Cek sinyalmu, lalu tekan 🎤 lagi.",
+        micNoSpeech: "Aku tidak mendengar apa-apa. Tekan 🎤 lalu langsung bicara, ya!",
+        micNoDevice: "Aku tidak menemukan mikrofon di perangkat ini. Ketik pertanyaanmu, ya.",
+        micLangNo: "Mikrofon belum mengerti bahasa ini. Ketik pertanyaanmu, ya." },
+  es: { micSwitch: "El micrófono no funciona en este navegador. Abre esta página en {b} para que pueda oírte. Mientras tanto, puedes escribir tu pregunta aquí.",
+        micOpen: "Abrir en {b}", micCopy: "Copiar enlace", micCopied: "¡Enlace copiado! Pégalo en {b}.",
+        micBlocked: "El micrófono todavía no tiene permiso. Permítelo para este sitio en los ajustes del navegador y vuelve a tocar 🎤.",
+        micNetwork: "Necesito internet para oírte. Revisa tu conexión y vuelve a tocar 🎤.",
+        micNoSpeech: "No oí nada. ¡Toca 🎤 y empieza a hablar enseguida!",
+        micNoDevice: "No encuentro un micrófono en este dispositivo. Escribe tu pregunta, por favor.",
+        micLangNo: "El micrófono todavía no entiende este idioma. Escribe tu pregunta, por favor." },
+  fr: { micSwitch: "Le micro ne fonctionne pas dans ce navigateur. Ouvre cette page dans {b} pour que je puisse t'entendre. En attendant, tu peux écrire ta question ici.",
+        micOpen: "Ouvrir dans {b}", micCopy: "Copier le lien", micCopied: "Lien copié ! Colle-le dans {b}.",
+        micBlocked: "Le micro n'est pas encore autorisé. Autorise-le pour ce site dans les réglages du navigateur, puis touche 🎤 à nouveau.",
+        micNetwork: "J'ai besoin d'Internet pour t'entendre. Vérifie ta connexion, puis touche 🎤 à nouveau.",
+        micNoSpeech: "Je n'ai rien entendu. Touche 🎤 et parle tout de suite !",
+        micNoDevice: "Je ne trouve pas de micro sur cet appareil. Écris ta question, s'il te plaît.",
+        micLangNo: "Le micro ne comprend pas encore cette langue. Écris ta question, s'il te plaît." },
+  pt: { micSwitch: "O microfone não funciona neste navegador. Abra esta página no {b} para eu poder ouvir você. Enquanto isso, você pode digitar sua pergunta aqui.",
+        micOpen: "Abrir no {b}", micCopy: "Copiar link", micCopied: "Link copiado! Cole no {b}.",
+        micBlocked: "O microfone ainda não tem permissão. Permita o microfone para este site nas configurações do navegador e toque em 🎤 de novo.",
+        micNetwork: "Preciso de internet para ouvir você. Confira sua conexão e toque em 🎤 de novo.",
+        micNoSpeech: "Não ouvi nada. Toque em 🎤 e comece a falar logo!",
+        micNoDevice: "Não encontrei um microfone neste aparelho. Digite sua pergunta, por favor.",
+        micLangNo: "O microfone ainda não entende este idioma. Digite sua pergunta, por favor." },
+  zh: { micSwitch: "这个浏览器还不能使用麦克风。请用 {b} 打开这个页面，这样我就能听到你说话。你也可以先在这里输入问题。",
+        micOpen: "用 {b} 打开", micCopy: "复制链接", micCopied: "链接已复制！请粘贴到 {b}。",
+        micBlocked: "还没有允许使用麦克风。请在浏览器设置里允许这个网站使用麦克风，然后再点 🎤。",
+        micNetwork: "我需要连上网络才能听到你。请检查网络，然后再点 🎤。",
+        micNoSpeech: "我什么也没听到。点一下 🎤，然后马上说话吧！",
+        micNoDevice: "这台设备上找不到麦克风。请输入你的问题。",
+        micLangNo: "麦克风还听不懂这种语言。请输入你的问题。" },
+  ja: { micSwitch: "このブラウザではマイクが使えないよ。{b} でこのページをひらくと、きみの声がきこえるよ。そのあいだは、ここに質問を入力してね。",
+        micOpen: "{b} でひらく", micCopy: "リンクをコピー", micCopied: "リンクをコピーしたよ！{b} にはりつけてね。",
+        micBlocked: "マイクがまだ許可されていないよ。ブラウザの設定でこのサイトのマイクを許可してから、もう一度 🎤 をおしてね。",
+        micNetwork: "声をきくにはインターネットが必要だよ。接続をたしかめて、もう一度 🎤 をおしてね。",
+        micNoSpeech: "何もきこえなかったよ。🎤 をおしたら、すぐに話してね！",
+        micNoDevice: "このデバイスにはマイクが見つからないよ。質問を入力してね。",
+        micLangNo: "マイクはまだこの言葉がわからないんだ。質問を入力してね。" },
+  ar: { micSwitch: "الميكروفون لا يعمل في هذا المتصفح. افتح هذه الصفحة في {b} حتى أسمعك. ويمكنك كتابة سؤالك هنا في الوقت الحالي.",
+        micOpen: "افتح في {b}", micCopy: "انسخ الرابط", micCopied: "تم نسخ الرابط! الصقه في {b}.",
+        micBlocked: "لم يُسمح باستخدام الميكروفون بعد. اسمح به لهذا الموقع من إعدادات المتصفح، ثم اضغط 🎤 مرة أخرى.",
+        micNetwork: "أحتاج إلى الإنترنت لأسمعك. تحقّق من الاتصال، ثم اضغط 🎤 مرة أخرى.",
+        micNoSpeech: "لم أسمع شيئًا. اضغط 🎤 وابدأ الكلام فورًا!",
+        micNoDevice: "لا أجد ميكروفونًا في هذا الجهاز. اكتب سؤالك من فضلك.",
+        micLangNo: "الميكروفون لا يفهم هذه اللغة بعد. اكتب سؤالك من فضلك." },
+  hi: { micSwitch: "इस ब्राउज़र में माइक्रोफ़ोन काम नहीं करता। यह पेज {b} में खोलो, ताकि मैं तुम्हारी आवाज़ सुन सकूँ। तब तक तुम यहाँ अपना सवाल लिख सकते हो।",
+        micOpen: "{b} में खोलो", micCopy: "लिंक कॉपी करो", micCopied: "लिंक कॉपी हो गया! इसे {b} में पेस्ट करो।",
+        micBlocked: "माइक्रोफ़ोन की अनुमति अभी नहीं मिली है। ब्राउज़र की सेटिंग में इस साइट के लिए माइक्रोफ़ोन की अनुमति दो, फिर 🎤 दोबारा दबाओ।",
+        micNetwork: "तुम्हें सुनने के लिए मुझे इंटरनेट चाहिए। अपना कनेक्शन देखो, फिर 🎤 दोबारा दबाओ।",
+        micNoSpeech: "मुझे कुछ सुनाई नहीं दिया। 🎤 दबाओ और तुरंत बोलना शुरू करो!",
+        micNoDevice: "इस डिवाइस में माइक्रोफ़ोन नहीं मिला। अपना सवाल लिखो।",
+        micLangNo: "माइक्रोफ़ोन अभी यह भाषा नहीं समझता। अपना सवाल लिखो।" },
+};
+for (const [l, o] of Object.entries(MIC_TEXT)) Object.assign(UI[l], o);
+
+// Kenali browser dari "user agent" (keterangan yang dikirim browser ke situs)
+const UA = navigator.userAgent;
+const isIOS = /iPhone|iPad|iPod/i.test(UA) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+const isAndroid = /Android/i.test(UA);
+// Browser mini di dalam aplikasi lain (WhatsApp, Instagram, Facebook, LINE, TikTok, pemindai QR, dll.)
+const inApp = /; wv\)|FBAN|FBAV|Instagram|Line\/|WhatsApp|TikTok|musical_ly|Bytedance/i.test(UA) || (isIOS && !/Safari\//.test(UA));
+const realChrome = isAndroid && /Chrome\//.test(UA) && !inApp &&
+  !/SamsungBrowser|MiuiBrowser|XiaoMi|OPR\/|EdgA|VivoBrowser|HeyTap|UCBrowser|YaBrowser|Firefox|DuckDuckGo/i.test(UA);
+const realSafari = isIOS && /Safari\//.test(UA) && !inApp && !/CriOS|FxiOS|EdgiOS|OPiOS|GSA\//.test(UA);
+const mobile = isIOS || isAndroid;
+const goodBrowser = !mobile || realChrome || realSafari;          // browser yang mikrofonnya bisa diandalkan
+const suggest = isIOS ? "Safari" : isAndroid ? "Chrome" : "Chrome / Edge / Safari";
+const fill = (k) => t(k).replace("{b}", suggest);
+
+function hideMicTip() { $("micTip").classList.remove("show"); }
+function showMicTip(key) {
+  $("micTipText").textContent = fill(key);
+  const row = $("micTipRow"); row.innerHTML = "";
+  if (key === "micSwitch" && mobile) {
+    // halaman yang dibuka di browser lain tetap memakai bahasa yang sama
+    const url = location.origin + location.pathname + "?lang=" + lang;
+    const go = document.createElement("button"); go.type = "button"; go.className = "go"; go.textContent = fill("micOpen");
+    go.onclick = () => {
+      location.href = isAndroid
+        ? "intent://" + url.replace(/^https?:\/\//, "") + "#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=" + encodeURIComponent(url) + ";end"
+        : "x-safari-" + url;                                   // membuka Safari (iOS 17 ke atas)
+    };
+    const cp = document.createElement("button"); cp.type = "button"; cp.className = "copy"; cp.textContent = t("micCopy");
+    cp.onclick = async () => {
+      try { await navigator.clipboard.writeText(url); }
+      catch (e) {                                              // cara lama untuk browser yang menolak clipboard
+        const ta = document.createElement("textarea"); ta.value = url; document.body.appendChild(ta);
+        ta.select(); try { document.execCommand("copy"); } catch (x) {} ta.remove();
+      }
+      $("micTipText").textContent = fill("micCopied");
+    };
+    row.append(go, cp);
+  }
+  $("micTip").classList.add("show");
 }
+$("micTipX").onclick = hideMicTip;
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, micStarted = false, micWatch = null, micFailed = false;
+function micOff() { clearTimeout(micWatch); $("micBtn").classList.remove("listening"); }
+// Di iPhone hanya Safari asli yang bisa (Chrome/aplikasi lain di iPhone menampilkan fitur ini tapi tidak berfungsi)
+if (SR && !inApp && !(isIOS && !realSafari)) {
+  rec = new SR(); rec.interimResults = false; rec.maxAlternatives = 1;
+  rec.onstart = () => { micStarted = true; };
+  rec.onresult = (e) => { hideMicTip(); $("input").value = e.results[0][0].transcript; $("form").requestSubmit(); };
+  rec.onend = () => { micOff(); if (!micFailed) $("status").textContent = t("ready"); };
+  rec.onerror = (e) => {
+    console.warn("Mikrofon:", e.error);
+    if (e.error === "aborted") return;
+    micFailed = true; micOff(); $("status").textContent = t("ready");
+    const key = {
+      "not-allowed":            goodBrowser ? "micBlocked" : "micSwitch",
+      "service-not-allowed":    goodBrowser ? "micBlocked" : "micSwitch",
+      "network":                goodBrowser ? "micNetwork" : "micSwitch",
+      "no-speech":              "micNoSpeech",
+      "audio-capture":          "micNoDevice",
+      "language-not-supported": "micLangNo",
+    }[e.error] || (goodBrowser ? "micNetwork" : "micSwitch");
+    showMicTip(key);
+  };
+}
+// Tombol 🎤 selalu tampil, supaya anak tahu ada fitur bicara dan mendapat petunjuk kalau belum bisa
 $("micBtn").onclick = () => {
-  if (!rec) return;
-  speechSynthesis.cancel(); stopTalking();
+  hush(); hideMicTip();
+  if (!rec) { showMicTip("micSwitch"); return; }
   // pakai logat perangkat kalau bahasanya sama (misal es-MX), kalau tidak pakai logat standar
   const dev = (navigator.language || "").replace(/_/g, "-");
   rec.lang = dev.toLowerCase().split("-")[0] === lang && dev.includes("-") ? dev : LANGS[lang].locale;
+  micStarted = false; micFailed = false;
   $("micBtn").classList.add("listening"); $("status").textContent = t("listen");
-  rec.start();
+  try { rec.start(); } catch (e) { try { rec.abort(); } catch (x) {} micOff(); $("status").textContent = t("ready"); return; }
+  // Penjaga untuk browser yang kurang dikenal (Mi Browser, Opera, dll.): kalau 8 detik mikrofon tidak
+  // juga mulai mendengar, browser ini kemungkinan tidak mendukung -> sarankan Chrome/Safari.
+  // (Di Chrome/Safari tidak dipakai, supaya anak punya waktu menekan "Izinkan".)
+  if (!goodBrowser) micWatch = setTimeout(() => {
+    if (micStarted) return;
+    micFailed = true; try { rec.abort(); } catch (x) {} micOff(); $("status").textContent = t("ready");
+    showMicTip("micSwitch");
+  }, 8000);
 };
 
 /* =========================================================
    MENU 3 TOMBOL → CHAT
    ========================================================= */
 function openMode(m) {
-  mode = m; history = [];
+  mode = m; history = []; hideMicTip();
   $("messages").innerHTML = "";
   $("home").style.display = "none"; $("chat").style.display = "flex"; $("backBtn").style.display = "inline-block";
   $("modeTitle").textContent = t(m);
@@ -655,7 +808,7 @@ function setLang(l, remember) {
   if (mode) $("modeTitle").textContent = t(mode); else $("status").textContent = t("hello");
   document.documentElement.lang = l;
   document.documentElement.dir = LANGS[l].rtl ? "rtl" : "ltr";
-  updateVoiceNote();
+  updateVoiceNote(); hideMicTip();
   if (mode && changed) openMode(mode);   // sedang di chat? mulai ulang dengan sapaan dalam bahasa baru
 }
 // Bahasa awal: ?lang=xx di alamat > pilihan terakhir anak > bahasa perangkat (kalau AUTO_LANG) > English
