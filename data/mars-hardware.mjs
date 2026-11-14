@@ -1,3 +1,4 @@
+// AI DISCLOSURE: compiled and summarised with AI assistance (Claude, Anthropic) from the sources listed below; checked by the team.
 // Daftar benda buatan manusia di permukaan Mars (untuk tombol Mars).
 // Sumber:
 //  - Informasi misi NASA (NSSDC Master Catalog, halaman misi NASA/JPL)
@@ -6,6 +7,7 @@
 //    (preprint independen yang disusun dari daftar Wikipedia; dipakai untuk benda kecil dan angka ringkasan)
 // Tahun ditulis tanpa tanggal persis supaya aman. Silakan tambah atau perbaiki bila perlu.
 export default {
+  aiAssistance: "Compiled with AI assistance (Claude, Anthropic); checked by the team",
   source: "Explorer Spirit list of human-made objects on Mars, compiled from NASA mission information, " +
           "NASA HiRISE orbital images (as listed by azmth.space) and T. Hotham (2026), Junk on the Moon and Mars, Zenodo",
   summary: "Hotham (2026) counts 27 human-made objects on Mars weighing about 10,380 kg in total. " +

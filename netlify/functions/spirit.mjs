@@ -1,3 +1,5 @@
+// AI DISCLOSURE: this code was written by Team NASA Chat Bot with AI assistance from Claude (Anthropic).
+// At runtime, answers are written by Google Gemini (Flash-Lite) from the NASA data found below.
 // =====================================================================
 // Explorer Spirit — "otak" chatbot (Netlify Function, jalan di server)
 // Sumber fakta (semuanya dari NASA):

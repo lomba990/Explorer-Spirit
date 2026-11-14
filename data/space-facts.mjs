@@ -1,3 +1,4 @@
+// AI DISCLOSURE: fact texts drafted with AI assistance (Claude, Anthropic) from the sources listed below; checked by the team.
 // Fakta luar angkasa untuk rasa ingin tahu anak-anak (dipakai di semua tombol, bersama astronaut-facts.mjs).
 // Sumber: halaman NASA dan ESA, Guinness World Records (rekor kecepatan), Wikipedia (Pratiwi Sudarmono, STS-61-H, Palapa),
 // Telkomsat dan Online Journal of Space Communication (Palapa). Angka dibulatkan seperti di buku pelajaran.
@@ -6,6 +7,7 @@
 //  - requireAny : (opsional) topik hanya dipakai kalau salah satu kata ini juga ada di pertanyaan
 //  - excludeAny : (opsional) topik tidak dipakai kalau ada salah satu kata ini
 export default {
+  aiAssistance: "Texts drafted with AI assistance (Claude, Anthropic); checked by the team",
   source: "Explorer Spirit space facts, compiled from NASA and ESA pages, Guinness World Records, Wikipedia and Indonesian satellite history sources (Telkomsat, Online Journal of Space Communication)",
   topics: [
     {

@@ -1,6 +1,9 @@
+// AI DISCLOSURE: converted from the official NASA PDF by a Python script written with AI assistance (Claude, Anthropic).
+// The facts themselves are NASA's; no AI-generated content was added to this file.
 // Data dari: NASA History Program Office, "Catalogue of Manmade Material on the Moon" (5 Juli 2012).
 // Dibuat otomatis dari PDF resmi NASA. Jangan diedit manual kecuali memperbaiki salah ketik.
 export default {
+  aiAssistance: "PDF converted to data with an AI-assisted script (Claude, Anthropic); facts are NASA's",
 "source": "NASA History Program Office, Catalogue of Manmade Material on the Moon (7-05-12)",
 "missions": {
 "Apollo 11": {

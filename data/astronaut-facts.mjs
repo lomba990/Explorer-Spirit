@@ -1,3 +1,4 @@
+// AI DISCLOSURE: fact texts drafted with AI assistance (Claude, Anthropic) from the sources listed below; checked by the team.
 // Fakta tentang kehidupan astronot (dipakai di semua tombol).
 // Sumber utama: NASA (Living and Working in Space fact sheet, NASA Day of Remembrance, NASA video "Running in Space",
 // Apollo flight summary NASA KSC untuk lama tinggal di Bulan), daftar Wikipedia (kecelakaan penerbangan antariksa,
@@ -5,6 +6,7 @@
 // ESA Kids "A day in space", Arlington National Cemetery, dan katalog NASA 2012 untuk benda peringatan di Bulan.
 // Tambah topik baru dengan pola yang sama. "keywords" = kata pemicu dalam bahasa Inggris dan Indonesia.
 export default {
+  aiAssistance: "Texts drafted with AI assistance (Claude, Anthropic); checked by the team",
   source: "Explorer Spirit astronaut facts, compiled from NASA pages (Living and Working in Space fact sheet, Day of Remembrance, Apollo flight summary), ESA Kids, Arlington National Cemetery, Wikipedia lists (spaceflight accidents, artificial objects, people who have flown to the Moon, people in space), ESA space environment statistics (Nov 2026), NASA Artemis II pages and T. Hotham (2026, Zenodo)",
   topics: [
     {
